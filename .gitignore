@@ -1,3 +1,9 @@
-.idea
+# Word / Excel のロックファイル
+~$*
+node_modules/
+.claude/settings.local.json
+Thumbs.db
 .DS_Store
+*.bak.docx
 *.bak
+.idea
