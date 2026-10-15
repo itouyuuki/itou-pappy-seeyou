@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>数字カウンター</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400&family=Noto+Sans+JP:wght@200;300;400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f3f0; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70;
+    --line: #e2e0dc; --accent: #2f6fdb; --accent-ink: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141416; --panel: #1d1d20; --ink: #ececef; --muted: #9a9aa2;
+      --line: #2e2e33; --accent: #6b9cff; --accent-ink: #0b0b0d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 14px;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 18px; font-weight: 400; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .stage {
+    position: relative; width: 100%; border-radius: 8px; overflow: hidden;
+    background-color: #888;
+    background-image:
+      linear-gradient(45deg, #777 25%, transparent 25%), linear-gradient(-45deg, #777 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #777 75%), linear-gradient(-45deg, transparent 75%, #777 75%);
+    background-size: 24px 24px; background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  }
+  canvas { display: block; width: 100%; height: auto; }
+  .transport { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  .transport input[type=range] { flex: 1; }
+  .time { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 92px; text-align: right; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+  .panel + .panel { margin-top: 12px; }
+  .panel h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 10px; }
+  label { display: block; margin: 10px 0 4px; font-size: 12px; color: var(--muted); }
+  textarea {
+    width: 100%; height: 150px; resize: vertical; font: 13px/1.6 ui-monospace, Consolas, monospace;
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px;
+  }
+  select, input[type=file] { width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row input[type=range] { flex: 1; }
+  .row output { min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+  button {
+    font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    border-radius: 6px; padding: 7px 12px; cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  .help { font-size: 12px; color: var(--muted); line-height: 1.7; margin: 6px 0 0; }
+  .help code { font-family: ui-monospace, Consolas, monospace; }
+  #status { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 1.4em; }
+  #download a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>数字カウンター</h1>
+  <p class="sub">カロリーメイト「今」篇の冒頭の数字演出を再現したもの。動画として書き出して、編集ソフトで映像に重ねて使う。</p>
+
+  <div class="grid">
+    <div>
+      <div class="stage"><canvas id="cv" width="1920" height="1080"></canvas></div>
+      <div class="transport">
+        <button id="play">▶ 再生</button>
+        <input id="seek" type="range" min="0" max="1000" value="0">
+        <span class="time" id="time">0.00 / 0.00</span>
+      </div>
+
+      <div class="panel" style="margin-top:12px">
+        <h2>書き出し</h2>
+        <div class="row">
+          <button class="primary" id="png">文字だけ書き出す（透明PNG連番・ZIP）</button>
+          <select id="fps" style="width:auto"><option value="30">30fps</option><option value="60">60fps</option></select>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="rec">● 背景つきで動画を書き出す</button>
+          <span id="download"></span>
+        </div>
+        <div id="status"></div>
+        <p class="help">
+          <b>文字だけ書き出す</b>：背景が透明なPNGを1コマずつ書き出してZIPにまとめる。コマ落ちしない。透明な動画（MOV／WebM）への変換はClaudeに頼む。<br>
+          <b>背景つき</b>：実時間で進む（全体の長さぶん待つ）。その間はこのタブを前面に出したままにする。<br>
+          <b>背景「黒」で書き出し → 編集ソフトで合成モードを「スクリーン」</b>にすると、黒が消えて文字だけ重なる（CapCut・Premiere・DaVinci どれでもできる）。いちばん確実。
+        </p>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>数字の並び</h2>
+        <textarea id="steps" spellcheck="false"></textarea>
+        <p class="help">
+          1行に <code>開始秒 数 単位 [種類]</code>。秒は動画の頭からの時刻。<br>
+          初期値は参考動画の秒数に合わせてある（BGMの頭＝0秒）。<br>
+          種類：なし＝カウントアップ／<code>spin</code>＝桁が回り続ける／<code>rewind</code>＝0まで巻き戻る。<br>
+          <code>end</code> の行で消える。<code>#</code> で始まる行は無視。<br>
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>見た目</h2>
+        <label>背景</label>
+        <select id="bg">
+          <option value="preview">確認用（暗い映像っぽい背景）</option>
+          <option value="black">黒（スクリーン合成用・おすすめ）</option>
+          <option value="green">グリーンバック</option>
+          <option value="transparent">透明（WebM・対応ソフトのみ）</option>
+          <option value="media">読み込んだ画像・動画</option>
+        </select>
+        <label>背景に使う画像・動画（確認用）</label>
+        <input id="media" type="file" accept="image/*,video/*">
+
+        <label>数字の太さ</label>
+        <select id="weight">
+          <option value="200">ExtraLight</option>
+          <option value="300" selected>Light（参考動画に近い）</option>
+          <option value="400">Regular</option>
+        </select>
+
+        <label>文字の大きさ</label>
+        <div class="row"><input id="size" type="range" min="40" max="200" value="78"><output id="sizeO"></output></div>
+        <label>字間</label>
+        <div class="row"><input id="track" type="range" min="0" max="30" value="10"><output id="trackO"></output></div>
+        <label>縦の位置（上から）</label>
+        <div class="row"><input id="ypos" type="range" min="20" max="80" value="50"><output id="yposO"></output></div>
+        <label>にじみ（グロー）</label>
+        <div class="row"><input id="glow" type="range" min="0" max="100" value="35"><output id="glowO"></output></div>
+
+
+        <label>画面比率</label>
+        <select id="aspect">
+          <option value="16:9">16:9（横）</option>
+          <option value="9:16">9:16（縦）</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d');
+
+  // 参考動画（カロリーメイト「今」篇）を0.05秒単位で見て合わせた時刻
+  const DEFAULT_STEPS = [
+    '# 開始秒  数  単位  [カウント秒 立ち上がり秒] または [spin / rewind]',
+    '1.55   8         年',
+    '3.78   2925      日    0.82 0.25',
+    '4.97   71280     時間  0.63 0.37',
+    '6.97   94608000  秒    0.95 0.15',
+    '11.07  -         秒  spin',
+    '13.65  0         秒  rewind',
+    '14.45  end',
+  ].join('\n');
+
+  let stored = null;
+  try { stored = localStorage.getItem('counter-steps-v2'); } catch (e) {}
+  $('steps').value = stored || DEFAULT_STEPS;
+
+  // ---------- timeline ----------
+  // 1行 = 「開始秒 数 単位 [count|spin|rewind] [カウントにかける秒]」。切り替えはすべてパッと（フェードなし）
+  function parseSteps() {
+    return $('steps').value.split('\n')
+      .map(s => s.trim()).filter(s => s && !s.startsWith('#'))
+      .map(s => {
+        const p = s.split(/\s+/);
+        const start = Number(p[0]);
+        if (p[1] === 'end') return { start, end: true };
+        const value = Math.max(0, Math.round(Number(String(p[1]).replace(/[,，]/g, ''))));
+        return {
+          start, value: isFinite(value) ? value : 0, unit: p[2] || '',
+          mode: ['spin', 'rewind'].includes(p[3]) ? p[3] : 'count',
+          dur: p[3] && !isNaN(Number(p[3])) ? Number(p[3]) : null,
+          rise: p[4] && !isNaN(Number(p[4])) ? Number(p[4]) : null,
+        };
+      })
+      .filter(s => isFinite(s.start))
+      .sort((a, b) => a.start - b.start);
+  }
+
+  function buildTimeline() {
+    const steps = parseSteps();
+    const segs = [];
+    let endAt = null;
+    steps.forEach((st, i) => {
+      if (st.end) { endAt = endAt ?? st.start; return; }
+      const next = steps.slice(i + 1).find(x => x.start > st.start);
+      segs.push({ ...st, end: next ? next.start : st.start + 3 });
+    });
+    if (endAt != null) segs.forEach(s => { s.end = Math.min(s.end, endAt); });
+    // spin / rewind は直前の数字を引き継ぐ
+    segs.forEach((s, i) => {
+      const prev = segs[i - 1];
+      if (s.mode === 'spin') s.base = prev ? (prev.mode === 'spin' ? spinValue(prev, prev.end) : prev.value) : s.value;
+      if (s.mode === 'rewind') s.base = prev ? (prev.mode === 'spin' ? spinValue(prev, prev.end) : prev.value) : s.value;
+    });
+    const last = segs.length ? segs[segs.length - 1].end : 0;
+    return { segs, total: last + 0.5 };
+  }
+
+  // ---------- number motion ----------
+  const fmt = n => n.toLocaleString('en-US');
+  const clamp01 = x => Math.max(0, Math.min(1, x));
+  const withCommas = digits => digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+  // deterministic pseudo random
+  function rnd(a, b) { let h = (a * 374761393 + b * 668265263) ^ 0x5bd1e995; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+  const flick = (i, t, hz = 25) => Math.floor(rnd(i + 1, Math.floor(t * hz)) * 10);
+
+  // カウントアップ。参考動画は「桁が一気に増えて目標の近くまで行く → 下の桁がちらついて決まる」
+  function countState(s, t) {
+    const dt = t - s.start, T = s.value;
+    if (T < 100) {
+      // 年：数字がランダムにちらついたあと、1, 2, 3… と数えて止まる
+      const total = s.dur || 0.95, fl = total * 0.68, cn = total - fl;
+      if (dt < fl) return { text: String(flick(0, t, 16)), unitA: 0 };
+      const n = Math.max(1, Math.ceil(clamp01((dt - fl) / cn) * T));
+      return { text: String(n), unitA: n >= Math.min(2, T) ? 1 : 0 };
+    }
+    const digits = String(T), n = digits.length;
+    const D = s.dur || 0.55 + 0.05 * n;
+    const p = dt / D;
+    if (p >= 1) return { text: fmt(T), unitA: 1 };
+    const r = clamp01((s.rise || D * 0.4) / D);
+    if (p < r) {
+      // 桁数が一定の速さで増える（参考動画の 65 → 902 → 14,806 の増え方）
+      const v = Math.round(Math.pow(T + 1, p / r) - 1);
+      return { text: fmt(Math.min(v, T)), unitA: 0 };
+    }
+    const q = (p - r) / (1 - r);
+    const locked = Math.floor(n * (0.45 + 0.55 * q));
+    let out = '';
+    for (let i = 0; i < n; i++) out += i < locked ? digits[i] : flick(i, t);
+    return { text: withCommas(out), unitA: p >= 0.85 ? 1 : 0 };
+  }
+
+  // 桁が左から順に回り始め、だんだん速くなる（頭のゼロも残して桁数を保つ）
+  function spinDigits(s, t) {
+    const base = String(s.base), n = base.length;
+    // 参考動画の spin は2.58秒。長さが違うときは同じ比率で伸び縮みさせる
+    const k = (s.end - s.start) / 2.58, dt = (t - s.start) / k;
+    let out = '';
+    for (let i = 0; i < n; i++) {
+      // 先頭の桁がすぐ回り出し、2桁目は0.5秒後、残りは1.2秒あたりから一斉に
+      const si = i === 0 ? 0.03 : i === 1 ? 0.5 : 1.2 + (i - 2) * 0.07;
+      if (dt < si) { out += base[i]; continue; }
+      const x = dt - si;
+      const steps = Math.floor((2 + 3.5 * x + 1.5 * x * x) * (1 + i * 0.9));
+      out += (Number(base[i]) + steps) % 10;
+    }
+    return out;
+  }
+  function spinValue(s, t) { return Number(spinDigits(s, t)); }
+
+  // 0への巻き戻し：桁が一定の速さで減っていく（対数的に縮む）。最後に0
+  function rewindState(s, t) {
+    const D = Math.max(0.05, (s.end - s.start) - 0.08);
+    const p = (t - s.start) / D;
+    const v = p >= 1 ? 0 : Math.round(Math.pow(s.base + 1, 1 - p) - 1);
+    return { text: fmt(v), unitA: 0 };
+  }
+
+  function frameState(tl, t) {
+    for (const s of tl.segs) {
+      if (t < s.start || t >= s.end) continue;
+      let st;
+      if (s.mode === 'spin') st = { text: withCommas(spinDigits(s, t)), unitA: 1 };
+      else if (s.mode === 'rewind') st = rewindState(s, t);
+      else st = countState(s, t);
+      return { ...st, unit: s.unit, alpha: 1 };
+    }
+    return null;
+  }
+
+  let mediaEl = null;
+
+  function drawBackground(mode) {
+    const W = cv.width, H = cv.height;
+    ctx.save();
+    if (mode === 'transparent') { ctx.clearRect(0, 0, W, H); }
+    else if (mode === 'black') { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
+    else if (mode === 'green') { ctx.fillStyle = '#00b140'; ctx.fillRect(0, 0, W, H); }
+    else if (mode === 'media' && mediaEl) {
+      const mw = mediaEl.videoWidth || mediaEl.naturalWidth, mh = mediaEl.videoHeight || mediaEl.naturalHeight;
+      if (mw && mh) {
+        const sc = Math.max(W / mw, H / mh);
+        ctx.drawImage(mediaEl, (W - mw * sc) / 2, (H - mh * sc) / 2, mw * sc, mh * sc);
+      } else { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
+    } else {
+      const g = ctx.createLinearGradient(0, 0, W, H);
+      g.addColorStop(0, '#3d4a52'); g.addColorStop(0.55, '#7c8a8f'); g.addColorStop(1, '#2a2f33');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, W * 0.75);
+      v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.55)');
+      ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.restore();
+  }
+
+  function drawNumber(st) {
+    if (!st || st.alpha <= 0) return;
+    const W = cv.width, H = cv.height;
+    const base = Math.min(W, H) / 1080;
+    const size = Number($('size').value) * base;
+    const track = Number($('track').value) / 100 * size;
+    const weight = $('weight').value;
+    const numFont = `${weight} ${size}px Montserrat`;
+    const unitSize = size * 0.42;
+    const unitFont = `${weight} ${unitSize}px "Noto Sans JP"`;
+
+    ctx.save();
+    ctx.font = numFont;
+    // fixed digit advance so the number doesn't wobble while counting
+    let adv = 0;
+    for (let d = 0; d < 10; d++) adv = Math.max(adv, ctx.measureText(String(d)).width);
+    const commaW = ctx.measureText(',').width;
+    const glyphW = ch => (ch === ',' ? commaW : adv);
+
+    const chars = [...st.text];
+    let numW = chars.reduce((w, ch) => w + glyphW(ch) + track, 0) - track;
+    ctx.font = unitFont;
+    const unitGap = size * 0.16;
+    const unitW = st.unit ? ctx.measureText(st.unit).width + unitGap : 0;
+
+    const y = H * Number($('ypos').value) / 100;
+    let x = W / 2 - (numW + unitW) / 2;
+
+    const glow = Number($('glow').value) / 100;
+    ctx.shadowColor = `rgba(255,255,255,${0.55 * glow})`;
+    ctx.shadowBlur = size * 0.35 * glow;
+    ctx.fillStyle = '#fff';
+    ctx.textBaseline = 'alphabetic';
+    const baseline = y + size * 0.35;
+
+    ctx.globalAlpha = st.alpha;
+    ctx.font = numFont;
+    ctx.textAlign = 'center';
+    for (const ch of chars) {
+      const w = glyphW(ch);
+      ctx.fillText(ch, x + w / 2, baseline);
+      x += w + track;
+    }
+    x -= track;
+    if (st.unit && st.unitA > 0) {
+      ctx.globalAlpha = st.alpha * st.unitA;
+      ctx.font = unitFont;
+      ctx.textAlign = 'left';
+      ctx.fillText(st.unit, x + unitGap, baseline);
+    }
+    ctx.restore();
+  }
+
+  // ---------- playback ----------
+  let tl = buildTimeline();
+  let playing = false, t0 = 0, cur = 0, recording = null;
+
+  function render(t) {
+    drawBackground(recording ? recording.bg : $('bg').value);
+    drawNumber(frameState(tl, t));
+    $('time').textContent = `${t.toFixed(2)} / ${tl.total.toFixed(2)}`;
+    $('seek').value = Math.round(t / tl.total * 1000);
+  }
+
+  function loop(now) {
+    if (playing) {
+      cur = (now - t0) / 1000;
+      if (cur >= tl.total) {
+        cur = tl.total;
+        if (recording) finishRecording();
+        else stop();
+      }
+    }
+    render(cur);
+    requestAnimationFrame(loop);
+  }
+
+  function play(from = 0) {
+    tl = buildTimeline();
+    cur = from >= tl.total ? 0 : from;
+    t0 = performance.now() - cur * 1000;
+    playing = true;
+    $('play').textContent = '❚❚ 停止';
+    if (mediaEl && mediaEl.play) { try { mediaEl.currentTime = 0; mediaEl.play(); } catch (e) {} }
+  }
+  function stop() { playing = false; $('play').textContent = '▶ 再生'; }
+
+  $('play').onclick = () => playing ? stop() : play(cur);
+  $('seek').oninput = e => { stop(); tl = buildTimeline(); cur = e.target.value / 1000 * tl.total; };
+
+  // ---------- recording ----------
+  function pickMime(bg) {
+    const list = bg === 'transparent'
+      ? ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+      : ['video/mp4;codecs=avc1.640028', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+    return list.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
+  }
+
+  $('rec').onclick = () => {
+    if (recording) return;
+    let bg = $('bg').value;
+    if (bg === 'preview') bg = 'black';
+    const mime = pickMime(bg);
+    const stream = cv.captureStream(60);
+    const mr = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 16_000_000 });
+    const chunks = [];
+    mr.ondataavailable = e => e.data.size && chunks.push(e.data);
+    mr.onstop = () => {
+      const type = mr.mimeType || mime || 'video/webm';
+      const blob = new Blob(chunks, { type });
+      const ext = type.includes('mp4') ? 'mp4' : 'webm';
+      const url = URL.createObjectURL(blob);
+      $('download').innerHTML = `<a href="${url}" download="number-counter_${bg}.${ext}">ダウンロード（${ext.toUpperCase()}・${(blob.size / 1e6).toFixed(1)}MB）</a>`;
+      $('status').textContent = '書き出し完了。';
+      $('rec').disabled = false;
+    };
+    recording = { mr, bg };
+    $('rec').disabled = true;
+    $('download').textContent = '';
+    $('status').textContent = `書き出し中…（背景：${bg}／約${tl.total.toFixed(1)}秒）`;
+    mr.start(250);
+    play(0);
+  }
+
+  $('png').onclick = async () => {
+    if (recording || !window.JSZip) { $('status').textContent = window.JSZip ? '' : 'ZIPの部品が読み込めていない（ネット接続を確認）'; return; }
+    stop();
+    tl = buildTimeline();
+    const fps = Number($('fps').value);
+    const n = Math.ceil(tl.total * fps);
+    const zip = new JSZip();
+    recording = { bg: 'transparent' };
+    $('png').disabled = $('rec').disabled = true;
+    $('download').textContent = '';
+    for (let i = 0; i < n; i++) {
+      render(i / fps);
+      const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+      zip.file(`frame_${String(i).padStart(5, '0')}.png`, blob);
+      if (i % 10 === 0) $('status').textContent = `書き出し中… ${i} / ${n} コマ`;
+    }
+    recording = null;
+    $('status').textContent = 'ZIPにまとめています…';
+    const out = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+    const url = URL.createObjectURL(out);
+    $('download').innerHTML = `<a href="${url}" download="number-counter_${fps}fps.zip">ダウンロード（ZIP・${(out.size / 1e6).toFixed(1)}MB・${n}コマ）</a>`;
+    $('status').textContent = `完了。${fps}fps・${n}コマ・${cv.width}×${cv.height}`;
+    $('png').disabled = $('rec').disabled = false;
+  };
+
+  function finishRecording() {
+    const r = recording;
+    playing = false; $('play').textContent = '▶ 再生';
+    setTimeout(() => { r.mr.stop(); recording = null; }, 300);
+  }
+
+  // ---------- controls ----------
+  const outs = { size: v => v, track: v => v, ypos: v => v + '%', glow: v => v };
+  Object.entries(outs).forEach(([id, f]) => {
+    const upd = () => { $(id + 'O').textContent = f($(id).value); tl = buildTimeline(); };
+    $(id).addEventListener('input', upd); upd();
+  });
+  $('steps').addEventListener('input', () => {
+    tl = buildTimeline();
+    try { localStorage.setItem('counter-steps-v2', $('steps').value); } catch (e) {}
+  });
+  $('aspect').onchange = e => {
+    const [w, h] = e.target.value === '9:16' ? [1080, 1920] : [1920, 1080];
+    cv.width = w; cv.height = h;
+    document.querySelector('.stage').style.maxWidth = e.target.value === '9:16' ? '420px' : '';
+  };
+  $('media').onchange = e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const url = URL.createObjectURL(f);
+    if (f.type.startsWith('video/')) {
+      mediaEl = document.createElement('video');
+      Object.assign(mediaEl, { src: url, muted: true, loop: true, playsInline: true });
+      mediaEl.play().catch(() => {});
+    } else {
+      mediaEl = new Image(); mediaEl.src = url;
+    }
+    $('bg').value = 'media';
+  };
+
+  Promise.all([
+    document.fonts.load('200 80px Montserrat'), document.fonts.load('300 80px Montserrat'),
+    document.fonts.load('400 80px Montserrat'), document.fonts.load('300 30px "Noto Sans JP"', '日時間秒年'),
+  ]).catch(() => {}).finally(() => { tl = buildTimeline(); requestAnimationFrame(loop); });
+})();
+</script>
+</body>
+</html>
