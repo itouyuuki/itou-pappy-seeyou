@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>1本目 Vコンテ v1</title>
+<style>
+:root{--bg:#111;--fg:#eee;--muted:#9a9a9a;--accent:#f0b429;--line:#333}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:18px;margin:0 0 4px}
+p.note{color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6}
+canvas{width:100%;aspect-ratio:16/9;display:block;background:#000;border-radius:6px}
+.ctrl{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+button{background:#242424;color:var(--fg);border:1px solid #444;border-radius:6px;padding:6px 12px;font-size:14px;cursor:pointer}
+button.on{border-color:var(--accent);color:var(--accent)}
+.bar{position:relative;flex:1;min-width:200px;height:28px;cursor:pointer}
+.bar .track{position:absolute;left:0;right:0;top:12px;height:4px;background:var(--line);border-radius:2px}
+.bar .fill{position:absolute;left:0;top:12px;height:4px;background:var(--accent);border-radius:2px}
+.bar .mk{position:absolute;top:7px;width:2px;height:14px;background:#666}
+#tc{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);min-width:120px}
+ol{font-size:13px;color:var(--muted);line-height:1.9;padding-left:22px;margin-top:14px}
+ol li{cursor:pointer}
+ol li.cur{color:var(--accent)}
+.music{font-size:13px;color:var(--muted)}
+.music label{display:inline-flex;align-items:center;gap:6px}
+.music input[type=number]{width:56px;background:#1c1c1c;color:var(--fg);border:1px solid #444;border-radius:4px;padding:3px}
+.music input[type=date]{background:#1c1c1c;color:var(--fg);border:1px solid #444;border-radius:4px;padding:3px}
+label.btn{background:#242424;color:var(--fg);border:1px solid #444;border-radius:6px;padding:6px 12px;font-size:14px;cursor:pointer}
+ol li span{font-variant-numeric:tabular-nums;display:inline-block;min-width:44px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>1本目 Vコンテ（構成 v1・約2分10秒）</h1>
+  <p class="note">参考：カロリーメイト「今」篇（3年間を日・時間・秒で数える → 周りの「続けるの？」という声 → 「今〇〇から。」で答える）。<br>それをぱっぴー向けに置き換えた動くコンテ。人＝シルエット（オレンジの縁がぱっぴー）、声＝字幕。セリフ・数字・場所はすべて仮。<br>最後は「伊藤のメッセージ」で終わり、2本目の頭（2本目 Vコンテ v5 の「1本目のラスト」）につながる。<br>スペースキーで再生／停止。左上の注釈は「注釈」ボタンで消せる。</p>
+  <canvas id="cv"></canvas>
+  <div class="ctrl">
+    <button id="play">▶ 再生</button>
+    <button id="restart">⟲ 最初から</button>
+    <button id="spd">1x</button>
+    <button id="ann" class="on">注釈</button>
+    <div class="bar" id="bar"><div class="track"></div><div class="fill" id="fill"></div></div>
+    <div id="tc"></div>
+  </div>
+  <div class="ctrl music">
+    <label>出会った日（仮） <input type="date" id="dMeet" value="2016-04-01"></label>
+    <label>送別会の日 <input type="date" id="dParty" value="2027-03-06"></label>
+    <label>出発の日（仮） <input type="date" id="dLeave" value="2027-03-31"></label>
+  </div>
+  <div class="ctrl music">
+    <label class="btn">♪ 音楽を選ぶ<input type="file" accept="audio/*" id="bgm" hidden></label>
+    <span id="bgmName">未選択</span>
+    <label>曲の開始位置 <input type="number" id="ofs" value="0" min="0" step="1">秒</label>
+    <label>音量 <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
+    <label><input type="checkbox" id="duck" checked> 声の場面で音楽を下げる</label>
+  </div>
+  <p class="note">数字は「出会った日 → 送別会の日」で計算する。「4. 反転」の残り日数は「送別会の日 → 出発の日」。出発日は 1月末か3月かが未定（Z-01）。<br>音楽は 0:00 から流れ、「4. 反転」で一度消え、「5. 今」で戻る。ファイルはこのPCの中で再生するだけで、どこにも送られない。</p>
+  <ol id="chs"></ol>
+</div>
+<script>
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const W=1280,H=720;cv.width=W;cv.height=H;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const smooth=u=>u*u*(3-2*u);
+const $=id=>document.getElementById(id);
+const nf=n=>Math.floor(n).toLocaleString('ja-JP');
+
+// ---------- 数字（日付から計算） ----------
+let N={};
+function calcNums(){
+  const m=new Date($('dMeet').value),p=new Date($('dParty').value),l=new Date($('dLeave').value);
+  const sec=Math.max(0,(p-m)/1000);
+  let y=p.getFullYear()-m.getFullYear();if(p<new Date(m.getFullYear()+y,m.getMonth(),m.getDate()))y--;
+  N={years:Math.max(0,y),days:sec/86400,hours:sec/3600,secs:sec,left:Math.max(0,Math.round((l-p)/86400000))};
+}
+['dMeet','dParty','dLeave'].forEach(id=>$(id).addEventListener('change',calcNums));calcNums();
+
+// ---------- タイムライン ----------
+const segs=[],chapters=[];let T=0;
+const ch=label=>chapters.push({label,t:T});
+function add(type,dur,o={}){const s=Object.assign({type,start:T,end:T+dur},o);segs.push(s);T+=dur;return s;}
+
+const DAILY=[
+ ['いつもの居酒屋','笑ってる（引き）',['#f0c9a5','#8a4e2e']],
+ ['車の中','助手席で歌ってる',['#d9d9de','#5b5d68']],
+ ['地元の駅','改札の前でふざける',['#f2e6c4','#a88d4b']],
+ ['誰かの家','寝落ちしてる',['#f3d3dc','#a5627a']],
+ ['海辺','走っていく後ろ姿',['#cfe7f2','#4a8db0']],
+ ['ファミレス','しゃべり続けてる',['#f5e1c0','#c27a3a']],
+ ['河川敷','夕方、ぼーっとしてる',['#dbe9d6','#7b9b6e']],
+ ['いつもの道','振り返って手を振る',['#e9e1f2','#8b77a8']]
+];
+// 周りの声：この送別の企画に向けられる「そこまでやる？」という声（参考動画の「続けるの？」にあたる）
+const VOICES=[
+ ['送別会なんて、飲み会でよくない？','職場の人（仮）'],
+ ['福島なんて、すぐ会いに行けるでしょ','友だち（仮）'],
+ ['そこまでやる？　正直めんどくさくない？','知り合い（仮）'],
+ ['大人になってまで、こういうのやる？','家族（仮）']
+];
+const NOW=['今 会えるから。','今 笑えるから。','今 言っておきたいから。','今しかないから。'];
+
+ch('1. 数える：一緒にいた時間を、日・時間・秒で');add('count',14);
+ch('2. いつもの日々（ぱっぴーの手持ち素材）');add('daily',30);
+ch('3. 周りの声：「そこまでやる？」');add('voice',28);
+ch('4. 反転：数字が減りはじめる');add('turn',10);
+ch('5. 「今」：答え');add('now',30);
+ch('6. 間');add('hold',6);
+ch('7. 1本目のラスト：伊藤のメッセージ');add('message',8);
+ch('→ 2本目へ（白いキャンバス）');add('next',4);
+const TOTAL=T;
+
+// ---------- 描画パーツ ----------
+function bgGrad(a,b){const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,a);g.addColorStop(1,b);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+function text(t,x,y,size,color,align='center',weight=500){ctx.font=`${weight} ${size}px system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif`;ctx.fillStyle=color;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(t,x,y);}
+function shadowText(t,x,y,size,align='center'){ctx.save();ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=8;text(t,x,y,size,'#fff',align);ctx.restore();}
+function subtitle(t){ctx.font='500 30px system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif';const w=ctx.measureText(t).width+48;ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(640-w/2,620,w,54);text(t,640,647,30,'#fff');}
+function black(a){if(a<=0)return;ctx.fillStyle=`rgba(0,0,0,${clamp(a,0,1)})`;ctx.fillRect(0,0,W,H);}
+function grain(a){const g=ctx.createRadialGradient(640,360,200,640,360,820);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,`rgba(0,0,0,${a})`);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+// 人のシルエット。pappy=true はオレンジの縁（主役）
+function figure(x,y,sc,t,o={}){
+  const bob=Math.sin(t*(o.speed||2))*3*sc;
+  ctx.save();ctx.translate(x,y+bob);ctx.scale(sc,sc);
+  if(o.pappy){ctx.shadowColor='rgba(255,150,60,.9)';ctx.shadowBlur=18;}
+  ctx.fillStyle=o.color||'rgba(38,36,46,.92)';
+  ctx.beginPath();ctx.ellipse(0,190,150,150,0,Math.PI,0);ctx.fill();
+  ctx.beginPath();ctx.ellipse(o.turn||0,0,62,72,0,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+// 右上で刻まれる数字（参考動画の右上の秒数）
+function counter(v,label,a=1){
+  ctx.save();ctx.globalAlpha=a;
+  ctx.font='300 30px system-ui,sans-serif';ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillStyle='rgba(255,255,255,.9)';
+  ctx.shadowColor='rgba(0,0,0,.5)';ctx.shadowBlur=6;ctx.fillText(nf(v)+label,W-40,56);ctx.restore();
+}
+
+// ---------- シーン描画 ----------
+function render(t){
+  t=clamp(t,0,TOTAL-1e-6);
+  const s=segs.find(x=>t>=x.start&&t<x.end)||segs[segs.length-1];
+  const d=s.end-s.start,lt=t-s.start,u=lt/d;
+  let ann='',audio='';
+  ctx.clearRect(0,0,W,H);
+  switch(s.type){
+  case 'count':{
+    // ぱっぴーの横顔（素材）の上に、数字が順番に出る
+    bgGrad('#c9d3da','#7e8c96');figure(760,300,1.6,t,{pappy:true,turn:-18});grain(.45);
+    const steps=[[2,5,`ぱっぴーと出会って ${N.years}年`],[5,8,`${nf(N.days)}日`],[8,11,`${nf(N.hours)}時間`],[11,14,null]];
+    if(lt<2){black(1-lt/2);ann='1. 黒から、ぱっぴーの横顔（手持ちの動画）';audio='環境音';}
+    for(const [a,b,str] of steps){if(lt<a||lt>=b)continue;const k=clamp((lt-a)/.4,0,1);ctx.globalAlpha=k;
+      if(str)shadowText(str,420,360,str.includes('年')?44:64,'center');
+      else{const v=N.secs-(N.secs*.02)*(1-smooth(clamp((lt-a)/2.5,0,1)));shadowText(nf(v)+'秒',420,360,64);}
+      ctx.globalAlpha=1;ann='1. 数える：年 → 日 → 時間 → 秒';audio='環境音 → 音楽がそっと入る';}
+    break;}
+  case 'daily':{
+    const n=DAILY.length,i=Math.min(n-1,Math.floor(u*n)),[place,act,bg]=DAILY[i],cu=(u*n)%1;
+    bgGrad(bg[0],bg[1]);ctx.fillStyle='rgba(0,0,0,.15)';ctx.fillRect(0,H-150,W,150);
+    const px=(i%2?780:500)+cu*40;
+    if(i%3!==1)figure(px+(i%2?-300:300),330,1.1,t+i,{speed:2.6});
+    figure(px,320,1.25,t,{pappy:true,speed:3,turn:i%2?-12:12});grain(.35);
+    counter(N.secs+lt,'秒',.85);
+    shadowText(place+'（仮）',40,H-40,20,'left');shadowText(act,40,H-72,18,'left');
+    ann=`2. いつもの日々 ${i+1}/${n}：みんなが持っている動画から`;audio='音楽（明るめ）＋その場の声・笑い声';break;}
+  case 'voice':{
+    const n=VOICES.length,i=Math.min(n-1,Math.floor(u*n)),[line,who]=VOICES[i],cu=(u*n)%1;
+    bgGrad('#9aa4ab','#4f585f');figure(i%2?520:760,330,1.4,t*.5,{pappy:true,speed:1,turn:i%2?14:-14});grain(.55);
+    counter(N.secs+28+lt,'秒',.5);
+    if(cu>.15){subtitle('「'+line+'」');shadowText('（'+who+'の声・顔は映さない）',640,598,16);}
+    ann=`3. 周りの声 ${i+1}/${n}：映像はぱっぴーの何気ない場面のまま`;audio=who+'の声（画面外）。音楽は小さく';break;}
+  case 'turn':{
+    // 一緒にいた秒数が止まり、残りの日数に切り替わる
+    bgGrad('#0b0c10','#121418');grain(.6);
+    if(lt<3){text(nf(N.secs+58)+'秒',640,360,64,'rgba(255,255,255,.85)',undefined,300);ann='4. 数字が止まる';}
+    else{const k=smooth(clamp((lt-3)/5,0,1)),v=Math.round(N.left+3*(1-k));
+      text('ぱっぴーが地元にいるのは',640,300,30,'rgba(255,255,255,.7)',undefined,300);
+      text('あと '+v+'日',640,380,72,'#fff',undefined,300);ann='4. 反転：「あと○日」';}
+    black((lt-(d-1))/1);audio='無音';break;}
+  case 'now':{
+    // 「今〇〇から。」を一つずつ。間に短いカットの連続
+    const n=NOW.length,seg=d/(n+1),i=Math.floor(lt/seg),cu=(lt%seg)/seg;
+    if(i<n){
+      const bg=DAILY[(i*3+1)%DAILY.length][2];
+      if(cu<.45){bgGrad('#000','#000');ctx.globalAlpha=clamp(cu/.08,0,1);text(NOW[i],640,360,56,'#fff',undefined,600);ctx.globalAlpha=1;ann='5. 「今」：言葉だけ（黒画面）';}
+      else{bgGrad(bg[0],bg[1]);figure(640+Math.sin(t)*40,320,1.5,t,{pappy:true,speed:4});grain(.3);shadowText(NOW[i],640,640,30);ann='5. 「今」：ぱっぴーの一番いい顔';}
+      audio='音楽（盛り上がる）＋'+(i===n-1?'みんなの声で「今しかないから」（仮）':'言葉は字幕のみ（声にするかは未決）');
+    }else{
+      const k=Math.floor(cu*10),bg=DAILY[k%DAILY.length][2];
+      bgGrad(bg[0],bg[1]);figure(400+(k*137)%480,330,1.2+(k%3)*.2,t,{pappy:true,speed:5,turn:(k%2?14:-14)});grain(.3);
+      ann='5. 短いカットの連続（ぱっぴーと、みんな）';audio='音楽（いちばん大きいところ）';
+    }
+    break;}
+  case 'hold':
+    bgGrad('#000','#000');ctx.globalAlpha=clamp(lt/1,0,1)*clamp((d-lt)/1,0,1);
+    text('ぱっぴーへ',640,360,40,'#fff',undefined,500);ctx.globalAlpha=1;
+    ann='6. 間';audio='音楽の余韻';break;
+  case 'message':
+    bgGrad('#000','#000');
+    text('伊藤からのメッセージ',640,350,40,'#eee',undefined,600);
+    text('※何を作ったかは、ここでは言わない',640,410,18,'#666');
+    black(1-lt/1);black((lt-(d-1.2))/1.2);
+    ann='7. 1本目のラスト（2本目 v5 の頭と同じ）';audio='伊藤の声';break;
+  case 'next':
+    bgGrad('#000','#000');text('→ 2本目へ（白いキャンバス）',640,360,28,'#888');
+    black(1-lt/1);ann='2本目へ';audio='無音';break;
+  }
+  if(annOn&&ann){
+    ctx.font='600 18px system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif';
+    const w=Math.max(ctx.measureText(ann).width,ctx.measureText('音：'+audio).width)+150;
+    ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(16,16,w,62);
+    text(fmt(t),30,36,16,'#f0b429','left',600);text(ann,110,36,18,'#fff','left',600);
+    text('音：'+(audio||'—'),110,60,15,'#ccc','left',400);
+  }
+  return s;
+}
+const fmt=x=>{x=Math.max(0,x);const m=Math.floor(x/60),s=Math.floor(x%60);return m+':'+String(s).padStart(2,'0');};
+
+// ---------- プレイヤー ----------
+let t=0,playing=false,last=performance.now(),speed=1,annOn=true;
+const playB=$('play'),bar=$('bar'),fillEl=$('fill'),tcEl=$('tc'),chs=$('chs');
+chapters.forEach(c=>{
+  const m=document.createElement('div');m.className='mk';m.style.left=(c.t/TOTAL*100)+'%';bar.appendChild(m);
+  const li=document.createElement('li');li.innerHTML=`<span>${fmt(c.t)}</span>${c.label}`;li.onclick=()=>{t=c.t;};chs.appendChild(li);
+});
+function updBtn(){playB.textContent=playing?'❚❚ 停止':'▶ 再生';}
+playB.onclick=()=>{if(t>=TOTAL-0.01)t=0;playing=!playing;updBtn();};
+$('restart').onclick=()=>{t=0;playing=true;updBtn();};
+$('spd').onclick=e=>{speed=speed===1?2:speed===2?4:1;e.target.textContent=speed+'x';};
+$('ann').onclick=e=>{annOn=!annOn;e.target.classList.toggle('on',annOn);};
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'){e.preventDefault();playB.click();}});
+function seek(e){const r=bar.getBoundingClientRect();t=clamp((e.clientX-r.left)/r.width,0,1)*TOTAL;}
+let drag=false;bar.addEventListener('pointerdown',e=>{drag=true;seek(e);});
+addEventListener('pointermove',e=>{if(drag)seek(e);});addEventListener('pointerup',()=>drag=false);
+// ---------- 音楽 ----------
+const audio=new Audio();let hasBgm=false,gainS=0;
+const segOf=type=>segs.find(s=>s.type===type);
+const MUSIC_END=segOf('message').start;
+$('bgm').onchange=e=>{const f=e.target.files[0];if(!f)return;audio.src=URL.createObjectURL(f);hasBgm=true;$('bgmName').textContent=f.name;};
+function musicGain(t){
+  if(t>=MUSIC_END)return 0;
+  const s=segs.find(x=>t>=x.start&&t<x.end);if(!s)return 0;
+  let g=Math.min(1,Math.max(0,t-2)/2,(MUSIC_END-t)/3);
+  if(s.type==='turn')g=0;
+  if(s.type==='now')g=Math.min(g,(t-s.start)/1.5);
+  if($('duck').checked&&s.type==='voice')g*=0.3;
+  return Math.max(0,g);
+}
+function syncMusic(){
+  if(!hasBgm)return;
+  const want=playing&&t<MUSIC_END,pos=t+(+$('ofs').value||0);
+  if(want){
+    audio.playbackRate=speed;
+    if(Math.abs(audio.currentTime-pos)>0.3)audio.currentTime=pos;
+    if(audio.paused)audio.play().catch(()=>{});
+  }else if(!audio.paused)audio.pause();
+  gainS+=(musicGain(t)-gainS)*0.05;
+  audio.volume=clamp(gainS*(+$('vol').value),0,1);
+}
+function frame(now){
+  if(playing){t+=(now-last)/1000*speed;if(t>=TOTAL){t=TOTAL;playing=false;updBtn();}}
+  last=now;render(t);syncMusic();
+  fillEl.style.width=(t/TOTAL*100)+'%';
+  tcEl.textContent='1本目 '+fmt(t)+' / '+fmt(TOTAL);
+  let ci=0;chapters.forEach((c,i)=>{if(t>=c.t)ci=i;});
+  [...chs.children].forEach((li,i)=>li.classList.toggle('cur',i===ci));
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

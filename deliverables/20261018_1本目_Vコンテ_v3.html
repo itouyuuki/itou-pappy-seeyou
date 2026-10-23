@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>1本目 Vコンテ v3</title>
+<style>
+:root{--bg:#111;--fg:#eee;--muted:#9a9a9a;--accent:#f0b429;--line:#333}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 8px}
+p.note{color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6}
+canvas#cv{width:100%;aspect-ratio:16/9;display:block;background:#000;border-radius:6px}
+canvas#wave{width:100%;height:46px;display:block;margin-top:8px;cursor:pointer}
+.ctrl{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+button{background:#242424;color:var(--fg);border:1px solid #444;border-radius:6px;padding:6px 12px;font-size:14px;cursor:pointer}
+button.on{border-color:var(--accent);color:var(--accent)}
+#tc{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);min-width:120px}
+.music{font-size:13px;color:var(--muted)}
+.music label{display:inline-flex;align-items:center;gap:6px}
+.music input[type=number]{width:56px;background:#1c1c1c;color:var(--fg);border:1px solid #444;border-radius:4px;padding:3px}
+.music input[type=date]{background:#1c1c1c;color:var(--fg);border:1px solid #444;border-radius:4px;padding:3px}
+label.btn{background:#242424;color:var(--fg);border:1px solid #444;border-radius:6px;padding:6px 12px;font-size:14px;cursor:pointer}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.55;min-width:760px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:500;background:var(--bg)}
+td.n{font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+tr.sec td{color:var(--accent);font-weight:600;padding-top:12px}
+tr.cut{cursor:pointer}
+tr.cut:hover td{background:#1a1a1a}
+tr.cur td{background:#2a2412}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>1本目 Vコンテ v3（構成を作り直し・約3分4秒）</h1>
+  <p class="note">10/18 の構成：ぱっぴーのスロー映像と数字 → LINE で福島行きを知って落ち込む → 送別会をやると意気込む → 動画の構成が決まらない → ららに詰められる → 雨の夜に悩む → また詰められ、ぱっぴーの動画を見返して「ぱっぴーを泣かせたいから」（1:58、曲の盛り上がり） → パソコンに向かい、みんなに声をかけてキャンバスを発注し、2本目の編集が完成 → end → 暗闇から伊藤が浮かびメッセージ → 2本目へ。<br>
+  時間割は、途中版（動画編集.mp4・2:44）の<b>音だけ</b>に合わせた。下の波形が途中版の音の大きさ。主人公の名前は途中版の字幕に合わせて「あさこ」。<br>
+  人＝シルエット（オレンジ＝ぱっぴー、青＝あさこ、緑＝らら）、声＝字幕。セリフ・数字はすべて仮。スペースキーで再生／停止。</p>
+  <canvas id="cv"></canvas>
+  <canvas id="wave"></canvas>
+  <div class="ctrl">
+    <button id="play">▶ 再生</button>
+    <button id="restart">⟲ 最初から</button>
+    <button id="spd">1x</button>
+    <button id="ann" class="on">注釈</button>
+    <div id="tc"></div>
+  </div>
+  <div class="ctrl music">
+    <label class="btn">♪ 途中版の音を読み込む<input type="file" accept="audio/*,video/mp4" id="bgm" hidden></label>
+    <span id="bgmName">未選択（動画編集.mp4 を選ぶと、その音で再生する）</span>
+    <label>ずらす <input type="number" id="ofs" value="0" step="0.5">秒</label>
+    <label>音量 <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
+  </div>
+  <div class="ctrl music">
+    <label>ぱっぴーと出会った日（仮） <input type="date" id="dMeet" value="2019-03-06"></label>
+    <label>送別会の日 <input type="date" id="dParty" value="2027-03-06"></label>
+  </div>
+  <p class="note">冒頭の数字は「出会った日 → 送別会の日」で計算する（途中版は 8年／2,925日／71,280時間／94,608,000秒 で、数字同士が合っていない）。読み込んだ音はこのPCの中で再生するだけで、どこにも送られない。</p>
+  <h2>カット表</h2>
+  <div class="tbl"><table><thead><tr><th>時間</th><th>#</th><th>中身</th><th>サイズ・アングル</th><th>カメラ</th><th>撮り方・素材</th><th>途中版の音</th></tr></thead><tbody id="cuts"></tbody></table></div>
+</div>
+<script>
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const W=1280,H=720;cv.width=W;cv.height=H;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const smooth=u=>u*u*(3-2*u);
+const lerp=(a,b,k)=>a+(b-a)*k;
+const $=id=>document.getElementById(id);
+const nf=n=>Math.floor(n).toLocaleString('ja-JP');
+// 途中版の音の大きさ（RMS dB、0.272秒ごと。ffmpeg で計測）
+const ENV=[-49,-48,-49,-48,-46,-40,-39,-36,-21,-14,-16,-22,-21,-23,-19,-17,-20,-20,-19,-22,-19,-16,-21,-22,-21,-22,-18,-16,-17,-22,-22,-19,-22,-21,-19,-26,-25,-27,-24,-17,-18,-25,-15,-16,-18,-16,-14,-16,-13,-15,-19,-15,-17,-17,-19,-30,-22,-21,-16,-17,-21,-17,-18,-17,-15,-23,-16,-23,-19,-16,-31,-22,-21,-18,-18,-28,-15,-15,-21,-27,-26,-12,-17,-16,-16,-20,-15,-17,-14,-18,-17,-17,-18,-20,-18,-24,-15,-23,-18,-18,-27,-20,-22,-17,-19,-28,-16,-16,-26,-22,-19,-13,-17,-17,-16,-18,-15,-17,-13,-18,-15,-16,-21,-27,-24,-15,-14,-15,-21,-21,-42,-20,-24,-12,-11,-14,-12,-11,-19,-10,-9,-11,-12,-12,-16,-15,-16,-14,-11,-16,-13,-17,-15,-20,-17,-13,-13,-14,-15,-21,-31,-18,-21,-13,-15,-18,-13,-16,-23,-16,-11,-14,-12,-13,-16,-14,-16,-12,-11,-14,-15,-17,-17,-17,-16,-12,-12,-12,-19,-22,-24,-19,-22,-13,-15,-19,-12,-15,-21,-14,-10,-14,-12,-14,-17,-12,-10,-8,-11,-13,-15,-15,-16,-10,-11,-11,-11,-10,-10,-11,-10,-7,-10,-10,-12,-13,-15,-14,-13,-13,-12,-13,-12,-11,-14,-14,-10,-11,-9,-9,-11,-14,-15,-12,-11,-11,-11,-11,-12,-13,-10,-10,-13,-13,-14,-15,-15,-15,-15,-15,-14,-15,-13,-14,-15,-14,-13,-11,-11,-11,-10,-12,-13,-12,-13,-13,-13,-16,-12,-13,-12,-12,-10,-11,-11,-11,-11,-12,-10,-10,-20,-26,-24,-26,-26,-24,-21,-17,-17,-45,-46,-101,-90,-90,-90,-90,-90,-90,-90,-90,-94,-68,-53,-54,-49,-48,-46,-43,-42,-40,-38,-37,-38,-37,-38,-38,-37,-39,-38,-39,-39,-39,-39,-39,-39,-40,-39,-38,-39,-38,-39,-37,-39,-38,-38,-36,-34,-34,-33,-32,-34,-35,-37,-39,-40,-45,-51,-51,-54,-53,-53,-54,-55,-55,-56,-57,-57,-57,-57,-58,-58,-59,-59,-59,-58,-56,-55,-56,-57,-57,-57,-58,-27,-26,-27,-28,-28,-26,-26,-28,-26,-27,-28,-28,-31,-28,-30,-27,-27,-25,-22,-14,-15,-22,-21,-22,-22,-16,-20,-20,-20,-22,-19,-16,-20,-21,-20,-22,-20,-16,-16,-21,-22,-19,-19,-18,-14,-15,-15,-16,-16,-17,-16,-17,-13,-14,-15,-15,-14,-14,-12,-12,-10,-11,-10,-11,-11,-11,-11,-11,-11,-12,-12,-11,-12,-11,-11,-11,-11,-11,-11,-11,-12,-11,-11,-11,-11,-12,-11,-12,-11,-12,-11,-11,-12,-10,-11,-11,-11,-11,-12,-12,-11,-11,-12,-11,-11,-10,-12,-11,-11,-10,-11,-10,-10,-10,-11,-11,-11,-10,-11,-12,-11,-11,-10,-11,-11,-11,-10,-11,-12,-11,-10,-11,-11,-11,-11,-11,-11,-11,-11,-11,-10,-11,-11,-11,-11,-11,-12,-10,-10,-11,-11,-11,-12,-11,-11,-10,-11,-10,-11,-11,-10,-11,-11,-11,-11,-11,-10,-10,-10,-10,-10,-11,-10,-11,-11,-11,-11,-10,-10,-12,-11,-12,-14,-12,-12,-14,-14,-10,-12,-14,-11,-10,-10,-11,-11,-12,-13,-13,-13,-16,-25,-55,-23,-37,-56,-22,-43,-35,-29,-31,-28,-52,-35,-37,-59,-70,-76,-36,-49,-69,-44,-69],ENV_STEP=12000/44100;
+
+// ---------- 数字 ----------
+let N={};
+function calcNums(){
+  const m=new Date($('dMeet').value),p=new Date($('dParty').value),sec=Math.max(0,(p-m)/1000);
+  let y=p.getFullYear()-m.getFullYear();if(p<new Date(m.getFullYear()+y,m.getMonth(),m.getDate()))y--;
+  N={years:Math.max(0,y),days:sec/86400,hours:sec/3600,secs:sec};
+}
+['dMeet','dParty'].forEach(id=>$(id).addEventListener('change',calcNums));calcNums();
+
+// ---------- 描画パーツ ----------
+const INK='#26242e';
+const GLOW={pappy:'rgba(255,140,40,.95)',asako:'rgba(90,160,255,.95)',rara:'rgba(110,210,140,.95)'};
+function bgGrad(a,b,y0=0,y1=H){const g=ctx.createLinearGradient(0,y0,0,y1);g.addColorStop(0,a);g.addColorStop(1,b);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h);}
+function rrect(x,y,w,h,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();}
+function poly(pts,c){ctx.fillStyle=c;ctx.beginPath();pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();}
+function circ(x,y,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
+function line(x1,y1,x2,y2,w,c){ctx.strokeStyle=c;ctx.lineWidth=w;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+function text(t,x,y,size,color,align='center',weight=500){ctx.font=`${weight} ${size}px system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif`;ctx.fillStyle=color;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(t,x,y);}
+function shadowText(t,x,y,size,align='center',weight=500){ctx.save();ctx.shadowColor='rgba(0,0,0,.7)';ctx.shadowBlur=10;text(t,x,y,size,'#fff',align,weight);ctx.restore();}
+function subtitle(t,who){ctx.font='500 30px system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif';const w=ctx.measureText(t).width+48;ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(640-w/2,620,w,54);text(t,640,647,30,'#fff');if(who)shadowText(who,640,598,16);}
+function black(a){if(a<=0)return;ctx.fillStyle=`rgba(0,0,0,${clamp(a,0,1)})`;ctx.fillRect(0,0,W,H);}
+function vignette(a){const g=ctx.createRadialGradient(640,360,220,640,360,820);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,`rgba(0,0,0,${a})`);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+function glow(who,blur=16){if(who&&GLOW[who]){ctx.shadowColor=GLOW[who];ctx.shadowBlur=blur;}else ctx.shadowBlur=0;}
+
+// 全身。y＝足もと。pose: stand/walk/run/sit/wave/cheers/lie/slump。view: front/back/left/right
+function fig(x,y,s,o={}){
+  const t=o.t||0,pose=o.pose||'stand',view=o.view||'front',d=view==='left'?-1:1,ph=t*(pose==='run'?11:6);
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
+  if(pose==='lie')ctx.rotate(-Math.PI/2);
+  glow(o.who);ctx.strokeStyle=ctx.fillStyle=o.color||INK;ctx.lineCap='round';ctx.lineJoin='round';
+  const sitting=pose==='sit'||pose==='slump',hip=sitting?-40:-82,sh=hip-64+(pose==='slump'?14:0),side=view==='left'||view==='right';
+  const L=(x1,y1,x2,y2,w)=>{ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();};
+  const P=(pts,w)=>{ctx.lineWidth=w;ctx.beginPath();pts.forEach(([a,b],i)=>i?ctx.lineTo(a,b):ctx.moveTo(a,b));ctx.stroke();};
+  if(pose==='run'||pose==='walk'){
+    const a=Math.sin(ph)*(pose==='run'?.75:.35);
+    for(const sg of [1,-1]){const b=a*sg,kx=Math.sin(b)*44,ky=hip+Math.cos(b)*44;P([[sg*(side?2:8),hip],[side?kx*d:sg*8+kx*.3,ky],[side?kx*d:sg*10+kx*.3,ky+40]],17);}
+  }else if(sitting){
+    if(side)P([[0,hip],[d*58,hip],[d*62,0]],17);else{P([[-10,hip],[-22,hip+14],[-24,0]],17);P([[10,hip],[22,hip+14],[24,0]],17);}
+  }else{L(-9,hip,-12,0,17);L(9,hip,12,0,17);}
+  const lean=pose==='slump'?(side?d*22:0):0;
+  L(0,hip,lean,sh+6,38);
+  if(pose==='run'||pose==='walk'){const a=Math.sin(ph)*(pose==='run'?.9:.4);for(const sg of [1,-1]){const b=-a*sg,ex=sg*(side?3:16)+Math.sin(b)*30*(side?d:.4);P([[sg*(side?3:14),sh],[ex,sh+28],[ex,sh+54]],13);}}
+  else if(pose==='wave'){P([[-14,sh],[-20,sh+34],[-20,sh+62]],13);P([[14,sh],[40,sh-26],[46+Math.sin(t*9)*14,sh-62]],13);}
+  else if(pose==='cheers'){P([[-14,sh],[-38,sh-30],[-44,sh-68]],13);P([[14,sh],[38,sh-30],[44,sh-68]],13);}
+  else if(pose==='slump'){P([[lean-12,sh],[lean-16,sh+36],[side?d*40:-14,hip+6]],13);P([[lean+12,sh],[lean+16,sh+36],[side?d*48:14,hip+6]],13);}
+  else if(sitting&&side){P([[0,sh],[d*24,sh+30],[d*44,sh+36]],13);}
+  else{P([[-14,sh],[-20,sh+34],[-20,sh+62]],13);P([[14,sh],[20,sh+34],[20,sh+62]],13);}
+  const hx=(side?d*3:0)+lean*1.4,hy=sh-30+(pose==='slump'?14:0);ctx.beginPath();ctx.arc(hx,hy,25,0,Math.PI*2);ctx.fill();
+  if(side){ctx.beginPath();ctx.moveTo(hx+d*21,hy-4);ctx.lineTo(hx+d*29,hy+4);ctx.lineTo(hx+d*20,hy+9);ctx.fill();}
+  if(view==='back'){ctx.fillStyle='rgba(0,0,0,.35)';ctx.shadowBlur=0;ctx.beginPath();ctx.arc(hx,hy-4,23,Math.PI*1.05,Math.PI*1.95);ctx.fill();}
+  ctx.restore();
+}
+// 寄りの上半身
+function bust(x,y,s,o={}){
+  const view=o.view||'front',d=view==='left'?-1:1,side=view==='left'||view==='right',t=o.t||0,down=o.down||0;
+  ctx.save();ctx.translate(x,y+(o.bob?Math.sin(t*o.bob)*4:0));ctx.scale(s,s);
+  glow(o.who,26);ctx.fillStyle=o.color||INK;
+  ctx.beginPath();ctx.ellipse(side?-d*20:0,330,side?190:250,170,0,Math.PI,0);ctx.fill();
+  ctx.fillRect(-45,120,90,100);
+  ctx.save();ctx.translate(0,down*40);ctx.rotate(side?d*down*.35:0);
+  ctx.beginPath();ctx.ellipse(side?d*8:0,40,side?104:110,128,0,0,Math.PI*2);ctx.fill();
+  if(side){ctx.beginPath();ctx.moveTo(d*100,10);ctx.lineTo(d*132,52);ctx.lineTo(d*100,62);ctx.fill();ctx.beginPath();ctx.moveTo(d*96,88);ctx.lineTo(d*112,96);ctx.lineTo(d*90,128);ctx.fill();}
+  if(view==='back'){ctx.shadowBlur=0;ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(0,20,104,118,0,Math.PI,0);ctx.fill();}
+  ctx.restore();ctx.restore();
+}
+function arm(x0,y0,x1,y1,w,c=INK){line(x0,y0,x1,y1,w,c);circ(x1,y1,w*.62,c);}
+// スマホ（LINE 風の画面）。msgs=[[me,文字]]、k=何件目まで出すか（小数で途中）
+function phone(x,y,s,msgs,k,o={}){
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.rotate(o.rot||0);
+  rrect(-170,-330,340,660,40,'#111');rrect(-155,-300,310,600,22,'#8eaed8');
+  rect(-155,-300,310,54,'#2c3e57');text(o.title||'',0,-273,22,'#fff');
+  let yy=-220;msgs.forEach(([me,str],i)=>{if(i+1>k+.999)return;const a=clamp(k-i,0,1);ctx.globalAlpha=a;ctx.font='500 20px system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif';const w=Math.min(250,ctx.measureText(str).width+30);
+    const bx=me?140-w:-140;if(!me)circ(-130,yy+22,0,'#fff');rrect(bx,yy,w,44,18,me?'#8de055':'#fff');text(str,bx+w/2,yy+23,20,'#111');ctx.globalAlpha=1;yy+=62;});
+  ctx.restore();
+}
+// ノートパソコン。screen(x,y,w,h) で画面の中を描く
+function laptop(x,y,s,screen){
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
+  rrect(-300,-370,600,380,14,'#1d1f24');ctx.save();ctx.beginPath();ctx.rect(-280,-350,560,340);ctx.clip();screen(-280,-350,560,340);ctx.restore();
+  poly([[-330,10],[330,10],[370,40],[-370,40]],'#3a3d44');ctx.restore();
+}
+function screenGlow(x,y,r,c='rgba(160,200,255,.35)'){const g=ctx.createRadialGradient(x,y,10,x,y,r);g.addColorStop(0,c);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+function deskRoom(night){bgGrad(night?'#14161d':'#d9d4ca',night?'#0b0c10':'#a39c90');rect(0,520,W,200,night?'#1c1a17':'#6d5a44');}
+function rain(t,a=.5){ctx.strokeStyle=`rgba(200,215,235,${a})`;ctx.lineWidth=2;ctx.beginPath();for(let i=0;i<140;i++){const x=(i*97.3+t*60)%W,y=((i*53.7)+t*900)%(H+80)-40;ctx.moveTo(x,y);ctx.lineTo(x-6,y+28);}ctx.stroke();}
+
+// 時計。h,m は回転数（1＝1周）
+function clockFace(x,y,r,h,m){circ(x,y,r,'#e8e8e8');circ(x,y,r*.92,'#fff');for(let i=0;i<12;i++){const a=i/12*Math.PI*2;line(x+Math.cos(a)*r*.78,y+Math.sin(a)*r*.78,x+Math.cos(a)*r*.86,y+Math.sin(a)*r*.86,r*.025,'#333');}
+  const A=h*Math.PI*2-Math.PI/2,B=m*Math.PI*2-Math.PI/2;line(x,y,x+Math.cos(A)*r*.48,y+Math.sin(A)*r*.48,r*.05,'#222');line(x,y,x+Math.cos(B)*r*.75,y+Math.sin(B)*r*.75,r*.03,'#222');circ(x,y,r*.04,'#222');}
+// 2本目の編集画面。prog＝プレビューの絵の仕上がり
+function editor(prog,o={}){
+  rect(0,0,W,H,'#1f2126');rect(0,0,W,40,'#2b2e35');text('2本目_ぱっぴー.prproj（編集中）',20,20,16,'#ddd','left');
+  rect(60,60,760,428,'#000');const cx=170,cy=80,cw=540,chh=388;rect(cx,cy,cw,chh,'#fbfaf6');
+  const GX=12,GY=9,cs=cw/GX,rs=chh/GY,NN=GX*GY,k=Math.floor(prog*NN),P=['#f2c6a0','#9cc3e6','#a8d5a2','#f4b6c2','#f5d58a','#c9b8e8','#9fd8d0'];
+  for(let i=0;i<NN;i++){const j=(i*37)%NN,x=cx+(j%GX)*cs,y=cy+Math.floor(j/GX)*rs;if(i<k)rect(x,y,cs,rs,P[(j*3+Math.floor(j/GX))%P.length]);else{ctx.strokeStyle='rgba(0,0,0,.08)';ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,cs-1,rs-1);}}
+  if(o.q)text('？',cx+cw/2,cy+chh/2,90,'rgba(0,0,0,.25)');
+  rect(840,60,380,428,'#26292f');text('素材',860,80,14,'#aaa','left');for(let i=0;i<12;i++)rect(860+(i%3)*118,100+Math.floor(i/3)*90,108,70,['#5d7a96','#8a6a52','#5f7f5a','#7a6b98'][i%4]);
+  rect(60,510,1160,190,'#2b2e35');['V1','V2','A1'].forEach((s,r)=>{text(s,72,545+r*50,13,'#888','left');rect(100,530+r*50,1100,34,'#33363e');});
+  for(let i=0;i<o.clips;i++){rect(104+i*108,532,102,30,['#5d8fc4','#d9895b','#5e9e57'][i%3]);if(i%2)rect(104+i*108,582,100,30,'#7a6bb0');}
+  rect(104,632,Math.min(1090,o.clips*108),30,'#3f7f6b');
+  line(104+(o.ph||0)*1090,515,104+(o.ph||0)*1090,695,3,'#e33');
+}
+// 雨の夜、窓の外から（参考画像の構図：左にカーテン、中央に部屋、右と上は外の暗い壁）
+function rainWindow(u,t){
+  rect(0,0,W,H,'#081015');
+  const X0=210,X1=850,Y0=140;
+  const g=ctx.createLinearGradient(X0,Y0,X1,H);g.addColorStop(0,'#b99c74');g.addColorStop(1,'#6a5236');ctx.fillStyle=g;ctx.fillRect(X0,Y0,X1-X0,H-Y0);
+  rect(420,Y0,430,110,'#cdb48f');line(420,250,850,250,6,'#7a5f40');rect(420,300,180,8,'#5a4430');rect(470,330,90,140,'#8a6440');rect(480,440,60,30,'#c9c3b8');
+  rect(740,250,70,130,'#d8d2c4');for(let i=0;i<6;i++)line(750,270+i*18,800,270+i*18,1,'#9a9488');
+  poly([[600,255],[690,255],[710,300],[700,410],[590,410],[580,300]],'#c2412e');line(645,240,645,258,3,'#333');
+  rect(440,520,140,90,'#e9e2d2');rect(450,530,40,60,'#c43');
+  circ(300,262,8,'#ffe9b0');circ(340,262,8,'#ffe9b0');screenGlow(320,262,120,'rgba(255,220,150,.35)');
+  const ig=ctx.createRadialGradient(560,330,40,560,400,520);ig.addColorStop(0,'rgba(255,200,120,.12)');ig.addColorStop(1,'rgba(0,0,0,.45)');ctx.fillStyle=ig;ctx.fillRect(X0,Y0,X1-X0,H-Y0);
+  // 人：両手で顔を覆う
+  const by=Math.sin(t*1.3)*2;bust(690,520+by,.62,{who:'asako',color:'#2a2730'});ctx.save();ctx.shadowBlur=0;arm(600,740,672,522+by,30,'#4a4552');arm(780,740,708,522+by,30,'#4a4552');ctx.restore();
+  // カーテンと窓枠、外の壁
+  ctx.globalAlpha=.88;rect(X0,Y0,150,H-Y0,'#3b3a36');ctx.globalAlpha=1;for(let i=0;i<6;i++)line(X0+12+i*24,Y0,X0+12+i*24+Math.sin(i)*6,H,4,'rgba(0,0,0,.25)');
+  rect(365,Y0,22,H-Y0,'#0e161a');rect(X0-10,Y0-14,X1-X0+20,18,'#0e161a');
+  rect(X1,0,W-X1,H,'#0c1519');rect(0,0,W,Y0-14,'#0a1216');rect(0,0,X0-10,H,'#0a1216');
+  // ガラスの雨粒と雨
+  ctx.save();ctx.beginPath();ctx.rect(X0,Y0,X1-X0,H-Y0);ctx.clip();
+  for(let i=0;i<260;i++){const x=X0+(i*97.13)%(X1-X0),y0=(i*53.71)%(H-Y0),sl=(i%9===0)?((t*40+i*13)%(H-Y0)):0,y=Y0+((y0+sl)%(H-Y0));circ(x,y,1+(i%3),'rgba(230,220,200,'+(.12+(i%4)*.06)+')');}
+  ctx.restore();rain(t,.28);
+}
+
+// ---------- カメラ ----------
+function cam(c,u,t){
+  c=c||{};const k=smooth(u),z=lerp(c.z0||1,c.z1||c.z0||1,k),p0=c.p0||[0,0],p1=c.p1||p0,px=lerp(p0[0],p1[0],k),py=lerp(p0[1],p1[1],k);
+  const sh=c.shake||0,sx=sh*(Math.sin(t*2.3)*6+Math.sin(t*5.1)*3),sy=sh*(Math.cos(t*1.9)*5+Math.sin(t*4.3)*2);
+  ctx.translate(640+px+sx,360+py+sy);ctx.scale(z,z);ctx.translate(-640,-360);
+}
+
+// ---------- カット ----------
+// sl＝スロー倍率（ぱっぴーの過去映像）
+const C={
+// 1. 長野の日々（ぱっぴーの過去映像をスロー）
+beach:{what:'ぱっぴーが波打ち際を走っていく後ろ姿',size:'大きい引き',angle:'後ろから',move:'固定・スロー',src:'これまで撮ったぱっぴーの動画（スロー）',sl:.35,
+  draw:(u,t)=>{bgGrad('#bfe0f0','#e8f3f7',0,300);rect(0,300,W,140,'#4a8db0');for(let i=0;i<3;i++)rect(0,430+i*14+Math.sin(t*2+i)*5,W,6,'rgba(255,255,255,.55)');rect(0,470,W,250,'#e9d9b5');const k=smooth(u);fig(lerp(560,680,k),lerp(690,560,k),lerp(1.5,.8,k),{pose:'run',view:'back',who:'pappy',t});}},
+laugh:{what:'ぱっぴーがカメラに向かって大笑い',size:'寄り（顔）',angle:'正面',move:'固定・スロー',src:'これまで撮ったぱっぴーの動画（スロー）',sl:.35,cam:{z0:1,z1:1.06},
+  draw:(u,t)=>{bgGrad('#f3dcc6','#c09a7b');bust(880,280,1.1,{who:'pappy',bob:14,t});}},
+river:{what:'夕方の河川敷、並んで座る背中',size:'引き',angle:'後ろ・少し上から',move:'固定・スロー',src:'これまで撮ったぱっぴーの動画・写真',sl:.35,
+  draw:(u,t)=>{bgGrad('#f7b267','#f4845f',0,380);circ(820,330,70,'#ffe2a8');rect(0,380,W,90,'#d77a55');poly([[0,470],[W,470],[W,H],[0,H]],'#3b3a2c');fig(560,660,1.5,{pose:'sit',view:'back',who:'pappy',color:'#16151a'});fig(700,660,1.5,{pose:'sit',view:'back',color:'#16151a'});}},
+wave:{what:'ぱっぴーが振り返って手を振る',size:'ミディアム（全身）',angle:'後ろ → 正面',move:'手持ち・スロー',src:'これまで撮ったぱっぴーの動画（スロー）',sl:.35,cam:{shake:.5},
+  draw:(u,t)=>{bgGrad('#e9e1f2','#b9aacd');poly([[560,330],[720,330],[1280,720],[0,720]],'#8a8496');u<.45?fig(640,650,2.2,{pose:'walk',view:'back',who:'pappy',t}):fig(640,650,2.2,{pose:'wave',who:'pappy',t});}},
+// 2. LINE で知る
+lineKnow:{what:'ぱっぴーから LINE。「福島行き、決まった」',size:'寄り（スマホの画面）',angle:'あさこの目線',move:'固定',src:'画面録画か、スマホの画面を撮る',
+  draw:(u,t)=>{rect(0,0,W,H,'#1a1b20');phone(640,380,.95,[[0,'おつかれ'],[0,'福島行き、決まった（仮）']],u*3,{title:'ぱっぴー'});arm(900,900,720,560,90);}},
+down:{what:'ベッドに座って、スマホを持ったままうなだれる',size:'ミディアム（全身）',angle:'真横',move:'固定',src:'撮影（伊藤）',tx:'あさこ落ち込む',
+  draw:(u,t)=>{deskRoom(true);screenGlow(700,470,220,'rgba(160,200,255,.25)');rect(380,520,520,80,'#3b3f52');fig(640,600,2,{pose:'slump',view:'right',who:'asako',t});}},
+// 3. 意気込む
+lineRara:{what:'ららに LINE。「ぱっぴーの送別会やろう」',size:'寄り（スマホの画面）',angle:'あさこの目線',move:'固定',src:'画面録画',
+  draw:(u,t)=>{rect(0,0,W,H,'#1a1b20');phone(640,380,.95,[[1,'ぱっぴーの送別会やろう'],[1,'ちゃんとしたやつ'],[0,'いいね！']],u*3.2,{title:'らら'});}},
+note:{what:'ノートに見出し「ぱっぴー福島行き 送別会の内容」。その下に案を書いては線で消す',size:'寄り（手元）',angle:'真上から',move:'固定',src:'撮影（手元）',
+  draw:(u,t)=>{rect(0,0,W,H,'#8a6b4a');rect(330,60,620,600,'#fbfaf3');for(let i=0;i<10;i++)line(360,170+i*48,920,170+i*48,1,'#c9d6e6');const hk=clamp(u*5,0,1),HD='ぱっぴー福島行き　送別会の内容';text(HD.slice(0,Math.ceil(hk*HD.length)),640,112,30,'#222','center',700);if(hk>=1)line(400,138,880,138,3,'#222');const I=['・飲み会','・寄せ書き','・アルバム','・みんなで旅行','・動画？'],v=(u-.2)/.8*I.length;const hy=192;I.forEach((s,i)=>{if(v>i){text(s,400,hy+i*58,26,'#333','left');if(i<I.length-1&&v>i+.75)line(395,hy+i*58,400+ctx.measureText(s).width+10,hy+i*58,3,'#c33');if(i===I.length-1&&v>i+.6){ctx.strokeStyle='#c33';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(455,hy+i*58,80,26,0,0,Math.PI*2);ctx.stroke();}}});const k=Math.min(I.length-1,Math.max(0,Math.floor(v)));arm(1100,820,u<.2?lerp(640,880,hk):520+Math.sin(t*6)*30,u<.2?140:hy+k*58+20,60);}},
+search:{what:'「送別会 思い出に残る内容」で検索',size:'寄り（画面）',angle:'肩越し',move:'ゆっくり寄る',src:'画面録画',cam:{z0:1,z1:1.12},
+  draw:(u,t)=>{deskRoom(true);laptop(640,520,1,(x,y,w,h)=>{rect(x,y,w,h,'#fff');rrect(x+60,y+60,w-120,46,23,'#f1f3f4');text('送別会 思い出に残る内容'.slice(0,Math.ceil(u*24)),x+90,y+83,22,'#222','left');for(let i=0;i<4;i++)if(u>.4)rect(x+60,y+140+i*48,w-200,14,'#c9d3f0');});ctx.save();ctx.filter='blur(14px)';circ(170,600,260,'rgba(20,20,26,.96)');ctx.restore();}},
+callAll:{what:'グループ LINE でみんなに声をかける。返事が次々来る',size:'寄り（スマホの画面）',angle:'あさこの目線',move:'固定',src:'画面録画（ぱっぴー抜きのグループ）',
+  draw:(u,t)=>{rect(0,0,W,H,'#1a1b20');phone(640,380,.95,[[1,'ぱっぴーには内緒で'],[1,'協力してほしい'],[0,'のった'],[0,'なにすんの？'],[0,'いいよー']],u*5.5,{title:'送別会（ぱっぴー抜き）'});}},
+order:{what:'キャンバスの注文ボタンを押す',size:'寄り（画面＋指）',angle:'肩越し',move:'固定',src:'画面録画＋手元',
+  draw:(u,t)=>{deskRoom(true);laptop(640,540,1,(x,y,w,h)=>{rect(x,y,w,h,'#fff');rect(x+40,y+40,200,200,'#e7dccb');for(let i=0;i<5;i++)for(let j=0;j<5;j++)rect(x+50+i*38,y+50+j*38,34,34,['#f2c6a0','#9cc3e6','#a8d5a2','#f4b6c2','#f5d58a'][(i+j)%5]);text('カスタム塗り絵キャンバス',x+270,y+70,20,'#222','left');const done=u>.6;rrect(x+270,y+180,220,50,10,done?'#3aa16c':'#f0b429');text(done?'注文完了':'注文を確定する',x+380,y+205,20,'#fff');});if(u<.6)arm(1100,900,lerp(1000,760,smooth(u/.6)),lerp(700,470,smooth(u/.6)),40);}},
+// 4. 構成が決まらない
+headHold:{what:'パソコンの前で頭を抱える',size:'ミディアム（胸から上）',angle:'正面（画面側から）',move:'固定',src:'撮影（伊藤）',
+  draw:(u,t)=>{rect(0,0,W,H,'#0c0d12');screenGlow(640,420,520);bust(640,300,1,{who:'asako',down:.5});arm(420,620,520,250,46);arm(860,620,760,250,46);rect(0,600,W,120,'#151619');}},
+timeline:{what:'2本目の編集画面。クリップを並べては消す',size:'寄り（画面）',angle:'正面',move:'固定',src:'画面録画（2本目の編集画面）',
+  draw:(u,t)=>{editor(.05,{clips:Math.floor((Math.sin(u*Math.PI*3)*.5+.5)*8),ph:u,q:1});}},
+notes:{what:'壁の付箋が増えては剥がされる',size:'引き（壁とあさこ）',angle:'正面',move:'固定（タイムラプス）',src:'撮影（タイムラプス）',
+  draw:(u,t)=>{rect(0,0,W,H,'#d8d2c6');const n=Math.floor(u*24);for(let i=0;i<n;i++){const x=200+(i*137)%860,y=90+(i*71)%300;rect(x,y,70,70,['#fff17a','#ffb3c7','#9fe0ff'][i%3]);}fig(640,700,2.3,{view:'back',who:'asako',t});}},
+clock:{what:'最初の2秒は時計を大きく → 作業中のあさこと壁の時計。針が速く回り、時間が過ぎていく',size:'寄り（時計）→ ミディアム（机と時計）',angle:'正面 → 斜め後ろ',move:'固定（タイムラプス）',src:'撮影（タイムラプス。時計は部屋の壁掛け）',
+  draw:(u,t)=>{const s=u*5.2;if(s<2){rect(0,0,W,H,'#1c1d22');clockFace(640,360,220,s*.05,s*.6);}else if(s<3.6){deskRoom(true);screenGlow(520,380,300);rect(330,250,360,230,'#9fb8d8');rect(250,470,520,18,'#3a332b');fig(520,690,2,{pose:'sit',view:'back',who:'asako',t:t*4});clockFace(1010,190,95,.1+(s-2)*.5,(s-2)*6);}else{rect(0,0,W,H,'#7b6650');rect(180,140,700,520,'#fbfaf3');for(let i=0;i<9;i++)rect(230,200+i*48,420-(i*61)%160,10,'#bbb');arm(520,820,430+Math.sin(t*14)*40,420,60);rect(940,40,320,320,'#2a2620');clockFace(1100,200,120,.9+(s-3.6)*.5,(s-3.6)*6);}}},
+nightMorning:{what:'夜 → 朝。机に向かったまま窓の外が明るくなる',size:'引き（部屋）',angle:'斜め後ろ',move:'固定（タイムラプス）',src:'撮影（タイムラプス）',
+  draw:(u,t)=>{const k=smooth(u);rect(0,0,W,H,`rgb(${lerp(14,190,k)|0},${lerp(16,180,k)|0},${lerp(24,165,k)|0})`);rect(820,80,360,300,`rgb(${lerp(20,250,k)|0},${lerp(30,220,k)|0},${lerp(60,170,k)|0})`);rect(990,80,16,300,'#333');rect(0,520,W,200,'#2a2620');rect(300,440,420,20,'#3a332b');screenGlow(480,400,200);fig(500,640,2,{pose:'sit',view:'back',who:'asako',t});}},
+paper:{what:'床に丸めた紙が増えていく',size:'引き（床）',angle:'真上から',move:'固定（タイムラプス）',src:'撮影',
+  draw:(u,t)=>{rect(0,0,W,H,'#b9a68d');const n=Math.floor(u*30);for(let i=0;i<n;i++)circ(200+(i*173)%880,120+(i*97)%480,24+(i%3)*6,'#f4f1ea');}},
+bedFall:{what:'ベッドに倒れ込む',size:'寄り（全身）',angle:'真上から',move:'固定',src:'撮影（伊藤）',
+  draw:(u,t)=>{rect(0,0,W,H,'#3b3f52');rect(250,140,780,440,'#d4d8e6');rect(300,190,140,110,'#fff');const k=smooth(clamp(u*2,0,1));ctx.globalAlpha=k;fig(780,360,2,{pose:'lie',who:'asako'});ctx.globalAlpha=1;}},
+again:{what:'それでもまたパソコンに向かう後ろ姿',size:'ミディアム',angle:'後ろから',move:'ゆっくり寄る',src:'撮影（伊藤）',cam:{z0:1,z1:1.1},
+  draw:(u,t)=>{deskRoom(true);screenGlow(640,330,420);rect(440,200,400,250,'#9fb8d8');rect(300,450,680,20,'#3a332b');fig(640,700,2.3,{pose:'sit',view:'back',who:'asako',t});}},
+// 5. ららに詰められる
+rara1:{what:'ららと向かい合う。「何のために動画作ってんの？」',size:'ミディアム（二人）',angle:'真横',move:'固定',src:'撮影（らら・伊藤）',line:['何のために動画作ってんの？','らら'],
+  draw:(u,t)=>{bgGrad('#d8c3a5','#8b7356');rect(0,520,W,200,'#5a4632');fig(380,640,2,{pose:'sit',view:'right',who:'rara',t});fig(900,640,2,{pose:'sit',view:'left',who:'asako',t});rect(520,500,240,24,'#3a2d20');}},
+silentFace:{what:'言い返せずに黙る',size:'寄り（顔）',angle:'正面',move:'ゆっくり寄る',src:'撮影（伊藤）',cam:{z0:1,z1:1.12},
+  draw:(u,t)=>{bgGrad('#8b7356','#4b3d2d');bust(640,280,1,{who:'asako',down:.25});}},
+// 6. 雨
+rainWin:{what:'雨の夜、窓の外から。部屋の中で顔を両手で覆うあさこ',size:'ミディアム（窓枠ごと）',angle:'窓の外から・目の高さ（窓は画面の左〜中央、右と上は外の暗い壁）',move:'ゆっくり寄る',src:'撮影（外から窓越し。雨の日。ガラスに雨粒）',cam:{z0:1,z1:1.08,p0:[0,0],p1:[-20,-10]},
+  draw:(u,t)=>{rainWindow(u,t);}},
+// 7. また詰められる → 答え
+rara2:{what:'ららが「なんでこんなことやってんの？」',size:'ミディアム',angle:'ららの肩越し → あさこ',move:'固定',src:'撮影',line:['なんでこんなことやってんの？','らら'],
+  draw:(u,t)=>{bgGrad('#4a4f5c','#23262e');bust(820,300,.8,{view:'left',who:'asako'});ctx.save();ctx.filter='blur(12px)';bust(230,380,1.2,{view:'back',who:'rara'});ctx.restore();}},
+memories:{what:'返事ができないまま、スマホでぱっぴーの動画を見返す',size:'寄り（スマホの画面）',angle:'肩越し',move:'ゆっくり寄る',src:'画面＋これまで撮ったぱっぴーの動画',cam:{z0:1,z1:1.12},
+  draw:(u,t)=>{rect(0,0,W,H,'#0d0e12');screenGlow(640,380,420);ctx.save();ctx.translate(640,380);rrect(-330,-180,660,360,30,'#111');ctx.beginPath();ctx.rect(-305,-160,610,320);ctx.clip();ctx.translate(-305,-160);ctx.scale(610/W,320/H);const n=Math.min(2,Math.floor(u*3));[C.beach,C.laugh,C.wave][n].draw((u*3)%1,t*.35);ctx.restore();ctx.save();ctx.filter='blur(14px)';bust(150,460,1.1,{view:'back',who:'asako'});ctx.restore();arm(1100,900,930,470,80);}},
+faceLit:{what:'画面の光に照らされた顔。何かに気づく',size:'寄り（顔）',angle:'正面',move:'ゆっくり寄る',src:'撮影（伊藤。暗い部屋でスマホの光だけ）',cam:{z0:1,z1:1.15},
+  draw:(u,t)=>{rect(0,0,W,H,'#08090c');screenGlow(640,420,360,'rgba(160,200,255,'+(.2+u*.25)+')');bust(640,290,1,{who:'asako',down:.3*(1-smooth(u))});}},
+answer:{what:'「ぱっぴーを泣かせたいから」',size:'寄り（顔）',angle:'正面',move:'固定',src:'撮影（伊藤）',line:['ぱっぴーを泣かせたいから。','あさこ'],
+  draw:(u,t)=>{bgGrad('#4a4f5c','#23262e');bust(640,270,1.05,{who:'asako'});}},
+// 8. 完成へ
+typing:{what:'キーボードを打つ手',size:'寄り（手元）',angle:'斜め上から',move:'固定',src:'撮影（手元）',
+  draw:(u,t)=>{rect(0,0,W,H,'#16171c');rect(200,300,880,320,'#2c2e35');for(let r=0;r<4;r++)for(let c=0;c<13;c++)rrect(230+c*64,330+r*68,56,56,6,'#43464f');arm(-80,900,440+Math.sin(t*14)*20,470,80);arm(1360,900,840+Math.cos(t*13)*20,470,80);}},
+word:{what:'Word に企画書を書く。行がどんどん増える',size:'寄り（画面）',angle:'正面',move:'ゆっくり寄る',src:'画面録画',cam:{z0:1,z1:1.06},
+  draw:(u,t)=>{rect(0,0,W,H,'#e9eaee');rect(0,0,W,56,'#2b579a');text('ぱっぴー送別 動画企画書.docx',30,28,20,'#fff','left');rect(290,90,700,640,'#fff');text('動画企画書',640,150,34,'#222');const n=Math.floor(u*14);for(let i=0;i<n;i++)rect(350,210+i*34,(i%4===0?300:560)-(i*37)%120,14,'#bbb');}},
+editDone:{what:'2本目の編集画面。タイムラインが埋まり、プレビューの絵が仕上がっていく',size:'寄り（画面）',angle:'正面',move:'固定',src:'画面録画（2本目の編集画面）',
+  draw:(u,t)=>{editor(lerp(.35,.95,u),{clips:Math.floor(lerp(4,10,u)),ph:u});}},
+dawn:{what:'朝日が差す部屋。パソコンに向かう背中',size:'引き（部屋）',angle:'斜め後ろ',move:'固定',src:'撮影（伊藤）',
+  draw:(u,t)=>{bgGrad('#f6d3a2','#c79a6a');rect(820,60,380,330,'#fff4d6');const g=ctx.createLinearGradient(820,60,300,700);g.addColorStop(0,'rgba(255,240,200,.6)');g.addColorStop(1,'rgba(255,240,200,0)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);rect(0,520,W,200,'#7a5a3e');rect(300,440,420,20,'#3a332b');fig(500,640,2,{pose:'sit',view:'back',who:'asako',t});}},
+over:{what:'肩越しに画面。最後の一文を打つ',size:'ミディアム',angle:'肩越し',move:'ゆっくり寄る',src:'撮影',cam:{z0:1,z1:1.12},
+  draw:(u,t)=>{deskRoom(false);laptop(700,560,1,(x,y,w,h)=>{rect(x,y,w,h,'#fff');for(let i=0;i<7;i++)rect(x+40,y+40+i*36,w-140-(i*53)%120,12,'#bbb');if(u>.5)text('ぱっぴーを泣かせる。',x+40,y+310,24,'#c33','left',700);});ctx.save();ctx.filter='blur(14px)';bust(220,420,1.1,{view:'back',who:'asako'});ctx.restore();}},
+complete:{what:'2本目の書き出しが完了する。100%',size:'寄り（画面）',angle:'正面',move:'固定',src:'画面録画',
+  draw:(u,t)=>{editor(1,{clips:10,ph:1});rect(0,0,W,H,'rgba(0,0,0,.45)');rrect(340,250,600,220,16,'#2f323a');const k=clamp(u*1.4,0,1);text(k<1?'「ぱっぴーへ_2本目.mp4」を書き出し中…':'2本目 完成',640,310,k<1?24:32,'#fff','center',k<1?500:700);rect(400,370,480,22,'#444');rect(400,370,480*k,22,k<1?'#5d8fc4':'#3aa16c');text(Math.floor(k*100)+'%',640,430,22,'#ccc');}},
+lean:{what:'椅子にもたれて、息をつく',size:'ミディアム',angle:'真横',move:'固定',src:'撮影（伊藤）',
+  draw:(u,t)=>{bgGrad('#f6d3a2','#c79a6a');rect(0,560,W,160,'#7a5a3e');rect(760,470,300,20,'#3a332b');fig(560,640,2.2,{pose:'sit',view:'right',who:'asako',t:t*.3});}},
+};
+
+// ---------- タイムライン（途中版の音に合わせた秒数） ----------
+const segs=[],chapters=[];let T=0;
+const ch=label=>chapters.push({label,t:T});
+const SND={};
+function add(type,dur,o={}){const s=Object.assign({type,start:T,end:T+dur},o);segs.push(s);T+=dur;return s;}
+function cut(sec,key,dur,o={}){return add('cut',dur,Object.assign({sec,c:C[key],key},o));}
+
+ch('1. 長野の日々：ぱっぴーのスロー映像＋数字');SND[1]='0:00〜0:01 無音 → 音が入る（BGM？）';
+add('blackIn',1.2);['beach','laugh','river','wave'].forEach((k,i)=>cut(1,k,i===3?3.8:3.7,{num:i}));
+ch('2. LINE で福島行きを知り、落ち込む');SND[2]='一定の音が続く';
+cut(2,'lineKnow',2.6);cut(2,'down',2.4);
+ch('3. 送別会をやると意気込む');SND[3]='一定の音が続く';
+cut(3,'lineRara',4);cut(3,'note',6);cut(3,'search',6);
+ch('4. 動画の構成が決まらない');SND[4]='0:36 から音が大きくなり、0:56〜1:18 がいちばん大きい';
+['headHold','timeline','notes','clock','nightMorning','paper','bedFall','again'].forEach(k=>cut(4,k,5.2));
+ch('5. ららに「何のために動画作ってんの？」と詰められる');SND[5]='1:19 で音が下がり、1:22〜1:25 は無音';
+cut(5,'rara1',3.2);cut(5,'silentFace',3);
+ch('6. 雨の夜、窓の外から。どうするか悩む');SND[6]='1:25〜1:36 小さい音が続く（雨音？）';
+cut(6,'rainWin',12);
+ch('7. ららに「なんでこんなことやってんの？」→ ぱっぴーの動画を見返す →「ぱっぴーを泣かせたいから」（1:58）');SND[7]='1:37〜1:44 無音 → 1:44 から盛り上がり始める → 1:58 で「泣かせたいから」';
+cut(7,'rara2',7);cut(7,'memories',7);cut(7,'faceLit',6.7);cut(7,'answer',4.5);
+ch('8. パソコンに向かう → みんなに声かけ・キャンバス発注 → 2本目が完成');SND[8]='2:00〜2:37 がいちばん大きい';
+cut(8,'typing',3);cut(8,'word',5);cut(8,'over',4.4);cut(8,'callAll',4.5);cut(8,'order',4.5);cut(8,'editDone',5);cut(8,'dawn',3);cut(8,'complete',4.5);cut(8,'lean',2.5);
+ch('9. 1本目 end');SND[9]='2:38〜2:44 フェードアウト';
+add('end',6);
+ch('10. 暗闇から伊藤が浮かび上がり、ぱっぴーへのメッセージ（本当の end）');SND[10]='途中版はここまで（2:44）。伊藤の声';
+add('emerge',16);
+ch('→ 2本目へ（白いキャンバス）');SND[11]='無音';
+add('next',4);
+const TOTAL=T;
+let ci=0;segs.forEach(s=>{const i=chapters.findIndex((c,j)=>s.start>=c.t&&(j===chapters.length-1||s.start<chapters[j+1].t));s.chap=i;});
+segs.forEach((s,i)=>{if(s.type==='cut'){let n=0;for(let j=0;j<=i;j++)if(segs[j].type==='cut'&&segs[j].sec===s.sec)n++;s.no=n;}});
+
+// ---------- シーン描画 ----------
+function render(t){
+  t=clamp(t,0,TOTAL-1e-6);
+  const s=segs.find(x=>t>=x.start&&t<x.end)||segs[segs.length-1];
+  const d=s.end-s.start,lt=t-s.start,u=lt/d;
+  let ann='',comp='';
+  ctx.clearRect(0,0,W,H);
+  if(s.type==='cut'){
+    const c=s.c,tt=c.sl?s.start+lt*c.sl:t;
+    ctx.save();cam(c.cam,u,tt);c.draw(u,tt);ctx.restore();vignette(.4);
+    if(c.sl){ctx.save();ctx.globalAlpha=.6;text('スロー',W-40,H-36,16,'#fff','right');ctx.restore();}
+    ann=`${chapters[s.chap].label.split('：')[0].split('（')[0]} #${s.no}　${c.what}`;comp=`構図：${c.size}／${c.angle}／${c.move}`;
+    if(s.sec===1){
+      if(s.num===0&&lt<1)black(1-lt);
+      const k=clamp((lt-.3)/.4,0,1);ctx.globalAlpha=k;
+      const str=[`長野で一緒に ${N.years}年`,`${nf(N.days)}日`,`${nf(N.hours)}時間`,null][s.num];
+      if(str)shadowText(str,640,110,s.num?54:42,'center',300);
+      else shadowText(nf(N.secs-(N.secs*.03)*(1-smooth(clamp(lt/2.5,0,1))))+'秒',640,110,54,'center',300);
+      ctx.globalAlpha=1;
+    }
+    if(c.line&&u>.15)subtitle('「'+c.line[0]+'」',c.line[1]);
+    if(c.tx){ctx.globalAlpha=clamp((u-.1)/.15,0,1);shadowText(c.tx,110,360,30,'left');ctx.globalAlpha=1;}
+  }else if(s.type==='blackIn'){rect(0,0,W,H,'#000');ann='黒';comp='';}
+  else if(s.type==='end'){rect(0,0,W,H,'#000');ctx.globalAlpha=clamp(lt/1,0,1)*clamp((d-lt)/1.5,0,1);text('（1本目 end）',640,360,28,'#777');ctx.globalAlpha=1;ann='9. 1本目 end';comp='構図：黒';}
+  else if(s.type==='emerge'){
+    rect(0,0,W,H,'#000');const k=smooth(clamp(lt/7,0,1));
+    ctx.save();ctx.globalAlpha=k;const g=ctx.createRadialGradient(640,300,20,640,320,420);g.addColorStop(0,`rgba(90,110,150,${.35*k})`);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    bust(640,290,1,{color:`rgb(${lerp(0,38,k)|0},${lerp(0,36,k)|0},${lerp(0,46,k)|0})`});ctx.restore();
+    if(lt>7.5)subtitle('「ぱっぴーへのメッセージ（仮）」','伊藤');
+    black((lt-(d-1.5))/1.5);
+    ann='10. 暗闇から伊藤が少しずつ浮かび上がる → メッセージ';comp='構図：寄り（顔〜胸）／正面／固定。暗い中に顔だけ明かり';
+  }else{rect(0,0,W,H,'#000');ctx.globalAlpha=clamp(lt,0,1);text('→ 2本目へ（白いキャンバス）',640,360,28,'#888');ctx.globalAlpha=1;ann='2本目へ';comp='';}
+  if(annOn&&ann){
+    ctx.font='600 18px system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif';const w1=ctx.measureText(ann).width;
+    ctx.font='400 15px system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif';
+    const snd='途中版の音：'+(SND[s.chap+1]||'—'),w=Math.max(w1,ctx.measureText(comp).width,ctx.measureText(snd).width)+130;
+    ctx.fillStyle='rgba(0,0,0,.62)';ctx.fillRect(16,16,w,86);
+    text(fmt(t),30,36,16,'#f0b429','left',600);text(ann,100,36,18,'#fff','left',600);
+    text(comp,100,60,15,'#f6d27a','left',400);text(snd,100,82,15,'#ccc','left',400);
+  }
+  return s;
+}
+const fmt=x=>{x=Math.max(0,x);const m=Math.floor(x/60),s=Math.floor(x%60);return m+':'+String(s).padStart(2,'0');};
+
+// ---------- 波形（途中版の音） ----------
+const wv=$('wave'),wx=wv.getContext('2d');
+function drawWave(){
+  const r=wv.getBoundingClientRect(),dpr=devicePixelRatio||1;if(wv.width!==Math.round(r.width*dpr)){wv.width=Math.round(r.width*dpr);wv.height=Math.round(46*dpr);}
+  const w=wv.width,h=wv.height;wx.clearRect(0,0,w,h);wx.fillStyle='#181818';wx.fillRect(0,0,w,h);
+  chapters.forEach((c,i)=>{const x=c.t/TOTAL*w;wx.fillStyle=i%2?'#1e1e1e':'#232323';const x2=(chapters[i+1]?chapters[i+1].t:TOTAL)/TOTAL*w;wx.fillRect(x,0,x2-x,h);wx.fillStyle='#555';wx.fillRect(x,0,1,h);wx.fillStyle='#888';wx.font=`${10*dpr}px sans-serif`;wx.fillText(String(i+1>10?'→':i+1),x+3*dpr,11*dpr);});
+  wx.fillStyle='rgba(240,180,41,.55)';
+  ENV.forEach((db,i)=>{const a=clamp((db+60)/55,0,1),x=i*ENV_STEP/TOTAL*w,bw=Math.max(1,ENV_STEP/TOTAL*w),bh=a*(h-14);wx.fillRect(x,h-bh,bw,bh);});
+  wx.fillStyle='#fff';wx.fillRect(t/TOTAL*w,0,2*dpr,h);
+}
+function seekWave(e){const r=wv.getBoundingClientRect();t=clamp((e.clientX-r.left)/r.width,0,1)*TOTAL;}
+let drag=false;wv.addEventListener('pointerdown',e=>{drag=true;seekWave(e);});
+addEventListener('pointermove',e=>{if(drag)seekWave(e);});addEventListener('pointerup',()=>drag=false);
+
+// ---------- カット表 ----------
+const tb=$('cuts'),rows=[];
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]);
+let lastChap=-1;
+segs.forEach(s=>{
+  if(s.chap!==lastChap){lastChap=s.chap;const r=document.createElement('tr');r.className='sec';r.innerHTML=`<td colspan="7">${esc(chapters[s.chap].label)}</td>`;tb.appendChild(r);}
+  const r=document.createElement('tr');r.className='cut';const snd=s.start===chapters[s.chap].t?esc(SND[s.chap+1]||''):'';let cells;
+  if(s.type==='cut'){const c=s.c;cells=[fmt(s.start),'#'+s.no,esc(c.what)+(c.line?`<br>セリフ「${esc(c.line[0])}」（${esc(c.line[1])}）`:'')+(s.sec===1?`<br>数字：${['○年','○日','○時間','○秒'][s.num]}`:''),esc(c.size)+'<br>'+esc(c.angle),esc(c.move),esc(c.src),snd];}
+  else if(s.type==='blackIn')cells=[fmt(s.start),'','黒','—','—','—',snd];
+  else if(s.type==='end')cells=[fmt(s.start),'','黒画面。1本目の end','—','—','—',snd];
+  else if(s.type==='emerge')cells=[fmt(s.start),'','暗闇から伊藤が少しずつ浮かび上がり、ぱっぴーへのメッセージ','寄り（顔〜胸）<br>正面','固定','撮影（暗い部屋で顔だけに明かり）。メッセージは録音',snd];
+  else cells=[fmt(s.start),'','2本目の白いキャンバスへ','—','—','—',snd];
+  r.innerHTML=cells.map((c,i)=>`<td${i<2?' class="n"':''}>${c}</td>`).join('');r.onclick=()=>{t=s.start;scrollTo({top:0,behavior:'smooth'});};
+  tb.appendChild(r);rows.push([s,r]);
+});
+
+// ---------- プレイヤー ----------
+let t=0,playing=false,last=performance.now(),speed=1,annOn=true;
+const playB=$('play'),tcEl=$('tc');
+function updBtn(){playB.textContent=playing?'❚❚ 停止':'▶ 再生';}
+playB.onclick=()=>{if(t>=TOTAL-0.01)t=0;playing=!playing;updBtn();};
+$('restart').onclick=()=>{t=0;playing=true;updBtn();};
+$('spd').onclick=e=>{speed=speed===1?2:speed===2?4:1;e.target.textContent=speed+'x';};
+$('ann').onclick=e=>{annOn=!annOn;e.target.classList.toggle('on',annOn);};
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'){e.preventDefault();playB.click();}});
+// ---------- 途中版の音 ----------
+const audio=new Audio();let hasBgm=false;
+$('bgm').onchange=e=>{const f=e.target.files[0];if(!f)return;audio.src=URL.createObjectURL(f);hasBgm=true;$('bgmName').textContent=f.name;};
+function syncMusic(){
+  if(!hasBgm)return;
+  const pos=t+(+$('ofs').value||0),want=playing&&pos>=0&&(!audio.duration||pos<audio.duration);
+  if(want){audio.playbackRate=speed;if(Math.abs(audio.currentTime-pos)>0.3)audio.currentTime=pos;if(audio.paused)audio.play().catch(()=>{});}
+  else if(!audio.paused)audio.pause();
+  audio.volume=+$('vol').value;
+}
+function frame(now){
+  if(playing){t+=(now-last)/1000*speed;if(t>=TOTAL){t=TOTAL;playing=false;updBtn();}}
+  last=now;const s=render(t);syncMusic();drawWave();
+  tcEl.textContent='1本目 '+fmt(t)+' / '+fmt(TOTAL);
+  rows.forEach(([x,r])=>r.classList.toggle('cur',x===s));
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

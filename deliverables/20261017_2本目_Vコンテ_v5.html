@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>2本目 Vコンテ v5</title>
+<style>
+:root{--bg:#111;--fg:#eee;--muted:#9a9a9a;--accent:#f0b429;--line:#333}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:18px;margin:0 0 4px}
+p.note{color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6}
+canvas{width:100%;aspect-ratio:16/9;display:block;background:#000;border-radius:6px}
+.ctrl{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+button{background:#242424;color:var(--fg);border:1px solid #444;border-radius:6px;padding:6px 12px;font-size:14px;cursor:pointer}
+button.on{border-color:var(--accent);color:var(--accent)}
+.bar{position:relative;flex:1;min-width:200px;height:28px;cursor:pointer}
+.bar .track{position:absolute;left:0;right:0;top:12px;height:4px;background:var(--line);border-radius:2px}
+.bar .fill{position:absolute;left:0;top:12px;height:4px;background:var(--accent);border-radius:2px}
+.bar .mk{position:absolute;top:7px;width:2px;height:14px;background:#666}
+#tc{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);min-width:120px}
+ol{font-size:13px;color:var(--muted);line-height:1.9;padding-left:22px;margin-top:14px}
+ol li{cursor:pointer}
+ol li.cur{color:var(--accent)}
+.music{font-size:13px;color:var(--muted)}
+.music label{display:inline-flex;align-items:center;gap:6px}
+.music input[type=number]{width:56px;background:#1c1c1c;color:var(--fg);border:1px solid #444;border-radius:4px;padding:3px}
+label.btn{background:#242424;color:var(--fg);border:1px solid #444;border-radius:6px;padding:6px 12px;font-size:14px;cursor:pointer}
+ol li span{font-variant-numeric:tabular-nums;display:inline-block;min-width:44px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>2本目 Vコンテ（構成 v6・約3分）</h1>
+  <p class="note">実写ではなく、構成・尺・リズムを確かめるための動くコンテ。人＝シルエット、声＝字幕、絵＝数字入りのマスで代用。名前・場所はすべて仮。<br>10/17 修正①：キャンバスの全体は「5. 完成」まで映さない。<br>10/17 修正②：応援メッセージを先に顔で数秒 → 声だけ残して塗っている場面へ。構図は 正面／手元／真横／肩越し／真上 を順番に回す。<br>スペースキーで再生／停止。左上の注釈は「注釈」ボタンで消せる。</p>
+  <canvas id="cv"></canvas>
+  <div class="ctrl">
+    <button id="play">▶ 再生</button>
+    <button id="restart">⟲ 最初から</button>
+    <button id="spd">1x</button>
+    <button id="ann" class="on">注釈</button>
+    <div class="bar" id="bar"><div class="track"></div><div class="fill" id="fill"></div></div>
+    <div id="tc"></div>
+  </div>
+  <div class="ctrl music">
+    <label class="btn">♪ 音楽を選ぶ<input type="file" accept="audio/*" id="bgm" hidden></label>
+    <span id="bgmName">未選択</span>
+    <label>曲の開始位置 <input type="number" id="ofs" value="0" min="0" step="1">秒</label>
+    <label>音量 <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
+    <label><input type="checkbox" id="duck" checked> 声の場面で音楽を下げる</label>
+  </div>
+  <p class="note">音楽は2本目の 0:00 から流れ、「7. 完成した絵（静止・無音）」の手前で消える。ファイルはこのPCの中で再生するだけで、どこにも送られない。</p>
+  <ol id="chs"></ol>
+</div>
+<script>
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const W=1280,H=720;cv.width=W;cv.height=H;
+let seed=11;function rnd(){seed=(seed*16807)%2147483647;return (seed-1)/2147483646;}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const smooth=u=>u*u*(3-2*u);
+
+// ---------- 塗り絵（コラージュ）の定義 ----------
+const GC=25,GR=20,CS=20,AW=GC*CS,AH=GR*CS;
+const regions=[
+ {x0:7,x1:18,y0:5,y1:15,p:['#f2c6a0','#d9895b','#8a4b2f','#f7e3c8'],main:true},
+ {x0:0,x1:7,y0:0,y1:9,p:['#9cc3e6','#5d8fc4','#dbe9f6','#2f5d8a']},
+ {x0:18,x1:25,y0:0,y1:10,p:['#a8d5a2','#5e9e57','#dff0d8','#2f6b3a']},
+ {x0:0,x1:7,y0:9,y1:20,p:['#f4b6c2','#d97a92','#fbe1e7','#9b4058']},
+ {x0:18,x1:25,y0:10,y1:20,p:['#f5d58a','#d9a63c','#fbedc4','#8f6a1e']},
+ {x0:7,x1:18,y0:0,y1:5,p:['#c9b8e8','#8d74c4','#ece4f8','#56408a']},
+ {x0:7,x1:18,y0:15,y1:20,p:['#9fd8d0','#4ea69a','#dcf2ef','#26695f']}
+];
+const cells=[];
+for(let y=0;y<GR;y++)for(let x=0;x<GC;x++){
+  const r=regions.find(R=>x>=R.x0&&x<R.x1&&y>=R.y0&&y<R.y1);
+  const n=Math.sin(x*0.9+y*0.4)+Math.cos(y*0.8-x*0.3)+rnd()*0.8;
+  const k=clamp(Math.floor((n+2)/4.8*4),0,3);
+  cells.push({x,y,c:r.p[k],num:regions.indexOf(r)*4+k+1,main:!!r.main});
+}
+const order=[],used=new Uint8Array(cells.length);
+while(order.length<cells.length){
+  let i;do{i=Math.floor(rnd()*cells.length)}while(used[i]);
+  const cx=cells[i].x,cy=cells[i].y;
+  for(let dy=-1;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+    const x=cx+dx,y=cy+dy;if(x<0||y<0||x>=GC||y>=GR)continue;
+    const j=y*GC+x;if(!used[j]){used[j]=1;order.push(j);}
+  }
+}
+const rank=new Int32Array(cells.length);order.forEach((j,k)=>rank[j]=k);
+
+// ---------- タイムライン ----------
+const segs=[],chapters=[];let T=0;
+const ch=label=>chapters.push({label,t:T});
+function add(type,dur,o={}){const s=Object.assign({type,start:T,end:T+dur,w:0},o);segs.push(s);T+=dur;return s;}
+const places=['カフェ','職場','実家のリビング','公園のベンチ','居酒屋','車の中','母校','駅前','海辺','友だちの部屋','ファミレス','河川敷','部活の部室','バイト先'];
+const placeBg=[['#f3d9b1','#c98d5a'],['#dfe6ee','#8fa3b8'],['#f1e3cf','#b08b65'],['#d8ecd0','#6f9a63'],['#f0c9a5','#8a4e2e'],['#d9d9de','#5b5d68'],['#e9e1f2','#8b77a8'],['#f2e6c4','#a88d4b'],['#cfe7f2','#4a8db0'],['#f3d3dc','#a5627a'],['#f5e1c0','#c27a3a'],['#dbe9d6','#7b9b6e'],['#e6dccd','#7d6a52'],['#e2ecf0','#5f7f8c']];
+const LET='ABCDEFGHIJKLMNOPQRSTUVWXYZ';let pi=0,wi=0;const people=[];
+// 塗っている場面の構図。順番に回して、続けて同じ構図が来ないようにする
+const SHOTS=['face','hand','side','over','top'];let shotK=0;
+const SHOTNAME={face:'正面：顔＋塗っている様子',hand:'手元のアップ',side:'真横から',over:'肩越し',top:'真上から（パレット・水入れも）'};
+function person(dur,voice,o={}){
+  const s=add('person',dur,Object.assign({voice,place:pi%places.length,who:LET[wi%26],side:wi%2,n:wi,w:voice?1:0.5},o));
+  s.shots=[];const k=voice?(dur>=10?3:2):1;for(let i=0;i<k;i++)s.shots.push(SHOTS[shotK++%SHOTS.length]);
+  people.push(s);pi++;wi++;return s;
+}
+function day(dur,pat){const end=T+dur;let last;for(const c of pat)last=person(c==='V'?5:1.5,c==='V');last.end+=end-T;T=end;}
+
+ch('1本目のラスト：伊藤のメッセージ');add('preface',6);
+const ZERO=T;
+ch('1. 最初の人：顔と手元から入る');person(20,true,{first:true});
+ch('2. 昼：いろんな人が塗る＋応援メッセージ');day(24,'VVSSVV');
+ch('3. 夜：手元だけ。誰もいない');add('night',5,{w:1.5});
+ch('2. 昼');day(25,'VSSSVVSV');
+ch('3. 夜');add('night',5,{w:1.5});
+ch('2. 昼（短いカットの連続）');day(26,'SSSSSSSVVV');
+ch('3. 夜');add('night',5,{w:1.5});
+ch('4. 最後の人');person(20,true,{last:true,w:2});
+ch('5. 完成：ここで初めて全体が見える');add('complete',10);
+ch('6. エンドロール：名前＋場所');add('endroll',20);
+ch('7. 完成した絵（静止・無音）');add('still',10);
+ch('8. 絵が動き出す');add('alive',10);
+ch('→ 上映後、そのまま手渡し');add('handoff',6);
+const TOTAL=T;
+{const sum=segs.reduce((a,s)=>a+s.w,0);let acc=0;for(const s of segs){s.f0=acc/sum;acc+=s.w;s.f1=acc/sum;}}
+
+// 声ありの人：先に応援メッセージを顔で数秒 → 声だけ残して塗っている場面へ。塗りが進むのは後半だけ
+function msgEnd(s){return s.voice?(s.first||s.last?0.25:0.33):0;}
+function fillAt(s,u){
+  if(s.type==='person'){const m=msgEnd(s);return s.f0+(s.f1-s.f0)*clamp((u-m)/(1-m),0,1);}
+  if(s.type==='night')return s.f0+(s.f1-s.f0)*smooth(u);
+  return s.f0;
+}
+
+// ---------- 描画パーツ ----------
+function bgGrad(a,b){const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,a);g.addColorStop(1,b);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+function text(t,x,y,size,color,align='center',weight=500){ctx.font=`${weight} ${size}px system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif`;ctx.fillStyle=color;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(t,x,y);}
+function shadowText(t,x,y,size,align='center'){ctx.save();ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=8;text(t,x,y,size,'#fff',align);ctx.restore();}
+function subtitle(t){ctx.font='500 30px system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif';const w=ctx.measureText(t).width+48;ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(640-w/2,620,w,54);text(t,640,647,30,'#fff');}
+function black(a){if(a<=0)return;ctx.fillStyle=`rgba(0,0,0,${clamp(a,0,1)})`;ctx.fillRect(0,0,W,H);}
+
+const AX=(W-AW)/2,AY=(H-AH)/2-10;
+function drawArt(ox,oy,s,frac,o={}){
+  const N=cells.length,cnt=frac*N,full=Math.floor(cnt),part=cnt-full;
+  ctx.save();ctx.translate(ox,oy);ctx.scale(s,s);
+  if(!o.noShadow){ctx.fillStyle='rgba(0,0,0,.28)';ctx.fillRect(7,9,AW,AH);}
+  ctx.fillStyle='#fbfaf6';ctx.fillRect(0,0,AW,AH);
+  if(o.filter)ctx.filter=o.filter;
+  for(let i=0;i<N;i++){
+    const c=cells[i],r=rank[i];let px=c.x*CS,py=c.y*CS;
+    if(o.jit){px+=Math.sin(o.t*1.7+c.y*0.6)*o.jit;py+=Math.cos(o.t*1.3+c.x*0.5)*o.jit;}
+    if(r<full||(r===full&&part>0)){
+      ctx.globalAlpha=r<full?1:part;ctx.fillStyle=c.c;ctx.fillRect(px-(o.jit?1:0),py-(o.jit?1:0),CS+(o.jit?2:0),CS+(o.jit?2:0));ctx.globalAlpha=1;
+    }
+    if(r>=full&&!o.noNums){
+      ctx.strokeStyle='rgba(0,0,0,.09)';ctx.lineWidth=1;ctx.strokeRect(px+.5,py+.5,CS-1,CS-1);
+      if(r>full||part<.5){ctx.font='8px sans-serif';ctx.fillStyle='#b9b5ac';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(c.num,px+CS/2,py+CS/2+.5);}
+    }
+  }
+  ctx.filter='none';
+  if(o.dim){ctx.fillStyle=`rgba(5,7,14,${o.dim})`;ctx.fillRect(0,0,AW,AH);}
+  ctx.restore();
+  const cur=cells[order[Math.min(full,N-1)]];
+  return {x:ox+(cur.x*CS+CS/2)*s,y:oy+(cur.y*CS+CS/2)*s};
+}
+function room(bg){bgGrad(bg[0],bg[1]);ctx.fillStyle='rgba(0,0,0,.18)';ctx.fillRect(0,H-150,W,150);}
+const cellAt=f=>cells[order[Math.min(Math.floor(f*cells.length),cells.length-1)]];
+// 手元アップ：塗っている周辺だけを大きく映す。全体の絵柄は分からない
+function closeUp(center,frac,sc,t,o={}){
+  const cx=center.x*CS+CS/2,cy=center.y*CS+CS/2;
+  return drawArt(640-cx*sc+Math.sin(t*.4)*12,380-cy*sc,sc,frac,Object.assign({noShadow:true},o));
+}
+// 顔＋塗っている様子：キャンバスは手前の縁だけ（中身は見せない）
+function drawPainter(bg,t){
+  bgGrad(bg[0],bg[1]);
+  const bob=Math.sin(t*2)*3;
+  ctx.fillStyle='rgba(38,36,46,.92)';
+  ctx.beginPath();ctx.ellipse(640,640,260,190,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(640,330+bob,98,110,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,.18)';ctx.beginPath();ctx.moveTo(230,H);ctx.lineTo(370,552);ctx.lineTo(910,552);ctx.lineTo(1050,H);ctx.fill();
+  ctx.fillStyle='#f4f1ea';ctx.beginPath();ctx.moveTo(240,H);ctx.lineTo(380,560);ctx.lineTo(900,560);ctx.lineTo(1040,H);ctx.fill();
+  const tx=620+Math.sin(t*2.6)*70,ty=640+Math.cos(t*3.1)*14;
+  ctx.save();ctx.lineCap='round';ctx.strokeStyle='rgba(38,36,46,.95)';ctx.lineWidth=40;
+  ctx.beginPath();ctx.moveTo(830,500);ctx.quadraticCurveTo(820,620,tx+40,ty-10);ctx.stroke();
+  ctx.lineWidth=5;ctx.strokeStyle='#6b4a2b';ctx.beginPath();ctx.moveTo(tx+40,ty-10);ctx.lineTo(tx,ty+6);ctx.stroke();ctx.restore();
+}
+// 真横から：キャンバスは薄い板にしか見えない
+function drawSide(bg,t){
+  bgGrad(bg[0],bg[1]);ctx.fillStyle='rgba(0,0,0,.15)';ctx.fillRect(0,H-140,W,140);
+  ctx.save();ctx.strokeStyle='#7a5a3a';ctx.lineWidth=10;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(370,230);ctx.lineTo(300,H);ctx.moveTo(370,230);ctx.lineTo(440,H);ctx.stroke();
+  ctx.translate(390,380);ctx.rotate(-0.12);ctx.fillStyle='#ebe6da';ctx.fillRect(-14,-210,28,400);ctx.fillStyle='#cdc6b5';ctx.fillRect(10,-210,6,400);ctx.restore();
+  const bob=Math.sin(t*2)*3;ctx.fillStyle='rgba(38,36,46,.92)';
+  ctx.beginPath();ctx.ellipse(880,660,230,230,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(830,300+bob,92,104,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.moveTo(742,290+bob);ctx.lineTo(718,322+bob);ctx.lineTo(746,332+bob);ctx.fill();
+  const tx=430+Math.sin(t*2.4)*6,ty=360+Math.sin(t*1.7)*60;
+  ctx.save();ctx.lineCap='round';ctx.strokeStyle='rgba(38,36,46,.95)';ctx.lineWidth=38;
+  ctx.beginPath();ctx.moveTo(840,480);ctx.quadraticCurveTo(650,540,tx+44,ty+12);ctx.stroke();
+  ctx.lineWidth=5;ctx.strokeStyle='#6b4a2b';ctx.beginPath();ctx.moveTo(tx+44,ty+12);ctx.lineTo(tx+6,ty);ctx.stroke();ctx.restore();
+}
+// 真上から：キャンバスの一部を斜めに、パレットと水入れを一緒に
+function drawTop(s,frac,t){
+  bgGrad('#c9a77c','#a8845a');
+  const c=cellAt(s.f0);
+  ctx.save();ctx.translate(500,360);ctx.rotate(-0.2);drawArt(-(c.x*CS+CS/2)*4,-(c.y*CS+CS/2)*4,4,frac);ctx.restore();
+  ctx.fillStyle='rgba(0,0,0,.2)';ctx.beginPath();ctx.ellipse(1056,536,170,120,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#f3efe6';ctx.beginPath();ctx.ellipse(1050,530,170,120,0,0,Math.PI*2);ctx.fill();
+  regions.forEach((r,i)=>{const a=i/regions.length*Math.PI*2;ctx.fillStyle=r.p[1];ctx.beginPath();ctx.arc(1050+Math.cos(a)*105,530+Math.sin(a)*68,22,0,Math.PI*2);ctx.fill();});
+  ctx.fillStyle='#d6e8ee';ctx.strokeStyle='#9fb9c2';ctx.lineWidth=6;ctx.beginPath();ctx.arc(1080,170,72,0,Math.PI*2);ctx.fill();ctx.stroke();
+  drawHand({x:500+Math.sin(t*3)*8,y:360+Math.cos(t*2.5)*6},0,t,true);
+}
+// 肩越し：手前に塗る人の頭（ボケ）、奥に手元
+function drawOver(s,bg,frac,t){
+  bgGrad(bg[0],bg[1]);
+  const tip=closeUp(cellAt(s.f0),frac,3.4,t);drawHand(tip,1,t,true);
+  ctx.save();ctx.filter='blur(14px)';ctx.fillStyle='rgba(30,28,36,.96)';
+  ctx.beginPath();ctx.ellipse(230,500,230,260,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(100,780,400,230,0,0,Math.PI*2);ctx.fill();ctx.restore();
+}
+function drawShot(shot,s,bg,frac,t){
+  if(shot==='face')drawPainter(bg,t);
+  else if(shot==='hand'){bgGrad(bg[0],bg[1]);const tip=closeUp(cellAt(s.f0),frac,4,t);drawHand(tip,s.side,t,true);}
+  else if(shot==='side')drawSide(bg,t);
+  else if(shot==='over')drawOver(s,bg,frac,t);
+  else drawTop(s,frac,t);
+}
+function drawHand(tip,side,t,noBody){
+  const sx=side?W+60:-60,sy=H+90,wig=Math.sin(t*9)*4,off=side?46:-46;
+  ctx.save();ctx.lineCap='round';
+  if(!noBody){
+  ctx.fillStyle='rgba(38,36,46,.9)';ctx.beginPath();ctx.arc(side?W-120:120,H-30,92,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(side?W-90:90,H+120,190,150,0,0,Math.PI*2);ctx.fill();}
+  ctx.strokeStyle='rgba(38,36,46,.92)';ctx.lineWidth=44;ctx.beginPath();ctx.moveTo(sx,sy);
+  ctx.quadraticCurveTo((sx+tip.x)/2+off*1.5,tip.y+200,tip.x+off+wig,tip.y+42);ctx.stroke();
+  ctx.lineWidth=5;ctx.strokeStyle='#6b4a2b';ctx.beginPath();ctx.moveTo(tip.x+off+wig,tip.y+42);ctx.lineTo(tip.x+wig*.5,tip.y);ctx.stroke();
+  ctx.restore();
+}
+function drawFace(bg){
+  bgGrad(bg[0],bg[1]);
+  const g=ctx.createRadialGradient(640,320,50,640,360,700);g.addColorStop(0,'rgba(255,255,255,.15)');g.addColorStop(1,'rgba(0,0,0,.25)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(38,36,46,.92)';ctx.beginPath();ctx.arc(640,290,112,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(640,680,280,210,0,0,Math.PI*2);ctx.fill();
+}
+
+// ---------- シーン描画 ----------
+function render(t){
+  t=clamp(t,0,TOTAL-1e-6);
+  const s=segs.find(x=>t>=x.start&&t<x.end)||segs[segs.length-1];
+  const d=s.end-s.start,lt=t-s.start,u=lt/d,frac=fillAt(s,u);
+  let ann='',audio='';
+  ctx.clearRect(0,0,W,H);
+  switch(s.type){
+  case 'preface':
+    bgGrad('#000','#000');
+    text('（1本目のラスト）',640,300,22,'#777');
+    text('伊藤からのメッセージ',640,350,40,'#eee',undefined,600);
+    text('※何を作ったかは、ここでは言わない',640,410,18,'#666');
+    black((lt-(d-1.2))/1.2);
+    ann='1本目のラスト';audio='伊藤の声';break;
+  case 'white':
+    room(['#ecebe6','#cfcbc2']);drawArt(AX,AY,1,0);
+    black(1-lt/1.2);ann='0. 白いキャンバス。数字だけ。説明なし';audio='無音';break;
+  case 'person':{
+    const bg=placeBg[s.place%placeBg.length],m=msgEnd(s);
+    const head=s.first?'1. 最初の人':s.last?'4. 最後の人':'2. 昼';
+    const msg='「'+s.who+'さんからの応援メッセージ（仮）」';
+    if(u<m){
+      drawFace(bg);text('カメラ目線（仮）',640,120,18,'rgba(0,0,0,.45)');
+      subtitle(msg);shadowText(s.who+'さん',40,H-40,22,'left');
+      ann=head+'：応援メッセージ（先に顔で数秒）';audio=s.who+'さんの声';
+    }else{
+      const v=(u-m)/(1-m),shot=s.shots[Math.min(s.shots.length-1,Math.floor(v*s.shots.length))];
+      drawShot(shot,s,bg,frac,t);
+      shadowText('場所：'+places[s.place]+'（仮）',40,H-40,20,'left');
+      if(s.voice){subtitle(msg);shadowText('（声だけ続いている）',640,598,16);}
+      ann=head+'：'+SHOTNAME[shot];audio=s.voice?s.who+'さんの応援メッセージ（声だけ続く）':'環境音（短いカット）';
+    }
+    break;}
+  case 'night':{
+    bgGrad('#07090f','#0d1018');
+    const g=ctx.createRadialGradient(640,200,20,640,330,520);g.addColorStop(0,'rgba(255,214,150,.22)');g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    closeUp(cellAt(s.f0),frac,3,t,{dim:.45});
+    text('夜',W-60,50,22,'rgba(255,255,255,.35)');
+    ann='3. 夜：誰もいない。手元だけが埋まっていく（タイムラプス）';audio='無音／かすかな環境音';break;}
+  case 'complete':{
+    // 手元のアップから引いていき、ここで初めて絵の全体が見える
+    room(['#f1efe8','#d6d1c5']);
+    const k=smooth(clamp(lt/6,0,1)),sc=4+(1-4)*k,c=cellAt(0.999);
+    const cx=(c.x*CS+CS/2)*(1-k)+AW/2*k,cy=(c.y*CS+CS/2)*(1-k)+AH/2*k;
+    drawArt(640-cx*sc,(380-10*k)-cy*sc,sc,1,{noShadow:k<.9});
+    ann='5. 完成：引いていき、ここで初めて全体が見える';audio='（音楽？未決）';break;}
+  case 'endroll':{
+    bgGrad('#000','#000');
+    const lines=[['塗ってくれた人たち（仮）','']].concat(people.map(p=>[p.who+'さん',places[p.place]+'（仮）']));
+    const lh=56,total=lines.length*lh,y0=H+20-u*(total+H*0.9);
+    lines.forEach((l,i)=>{const y=y0+i*lh;if(y<-40||y>H+40)return;
+      if(i===0)text(l[0],640,y,30,'#fff',undefined,600);
+      else{text(l[0],620,y,26,'#eee','right');text(l[1],660,y,22,'#999','left');}});
+    black(1-lt/1);black((lt-(d-1))/1);
+    ann='6. エンドロール：名前＋場所の一覧';audio='（音楽？未決）';break;}
+  case 'still':
+    bgGrad('#1a1a1a','#0e0e0e');drawArt(AX,AY,1,1,{noNums:true});
+    black(1-lt/1);ann='7. 完成した絵（静止・無音）';audio='無音';break;
+  case 'alive':{
+    bgGrad('#0e0e0e','#0e0e0e');
+    const z=smooth(clamp(lt/3.5,0,1)),sc=1+z*1.6,p=smooth(clamp((lt-3)/2,0,1));
+    const ox=640-250*sc,oy=360-200*sc;
+    drawArt(ox,oy,sc,1,{noNums:true,noShadow:true,filter:p>0?`blur(${p*7}px) saturate(${1+p*.3})`:'none',jit:p*3,t});
+    if(p>0){const g=ctx.createRadialGradient(900,150,30,900,150,700);g.addColorStop(0,`rgba(255,200,120,${.25*p})`);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+    if(lt>4.2)subtitle('「いいの撮れたんじゃない！？」');
+    if(lt>4.2)shadowText('＋その場の環境音（シャッター音なし）',640,590,18);
+    black((lt-(d-2))/2);
+    ann='8. コラージュ中央の1枚が動き出す';audio=lt>4.2?'「いいの撮れたんじゃない！？」＋環境音':'無音';break;}
+  case 'handoff':
+    bgGrad('#000','#000');text('上映終了 → そのまま手渡し',640,360,30,'#ddd');
+    black(1-lt/1);ann='上映後';audio='';break;
+  }
+  if(annOn&&ann){
+    const tc=t<ZERO?'1本目':fmt(t-ZERO);
+    ctx.font='600 18px system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif';
+    const w=Math.max(ctx.measureText(ann).width,ctx.measureText('音：'+audio).width)+150;
+    ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(16,16,w,62);
+    text(tc,30,36,16,'#f0b429','left',600);text(ann,110,36,18,'#fff','left',600);
+    text('音：'+(audio||'—'),110,60,15,'#ccc','left',400);
+  }
+  return s;
+}
+const fmt=x=>{x=Math.max(0,x);const m=Math.floor(x/60),s=Math.floor(x%60);return m+':'+String(s).padStart(2,'0');};
+
+// ---------- プレイヤー ----------
+let t=0,playing=false,last=performance.now(),speed=1,annOn=true;
+const $=id=>document.getElementById(id),playB=$('play'),bar=$('bar'),fillEl=$('fill'),tcEl=$('tc'),chs=$('chs');
+chapters.forEach((c,i)=>{
+  const m=document.createElement('div');m.className='mk';m.style.left=(c.t/TOTAL*100)+'%';bar.appendChild(m);
+  const li=document.createElement('li');li.innerHTML=`<span>${c.t<ZERO?'—':fmt(c.t-ZERO)}</span>${c.label}`;li.onclick=()=>{t=c.t;};chs.appendChild(li);
+});
+function updBtn(){playB.textContent=playing?'❚❚ 停止':'▶ 再生';}
+playB.onclick=()=>{if(t>=TOTAL-0.01)t=0;playing=!playing;updBtn();};
+$('restart').onclick=()=>{t=0;playing=true;updBtn();};
+$('spd').onclick=e=>{speed=speed===1?2:speed===2?4:1;e.target.textContent=speed+'x';};
+$('ann').onclick=e=>{annOn=!annOn;e.target.classList.toggle('on',annOn);};
+document.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();playB.click();}});
+function seek(e){const r=bar.getBoundingClientRect();t=clamp((e.clientX-r.left)/r.width,0,1)*TOTAL;}
+let drag=false;bar.addEventListener('pointerdown',e=>{drag=true;seek(e);});
+addEventListener('pointermove',e=>{if(drag)seek(e);});addEventListener('pointerup',()=>drag=false);
+// ---------- 音楽（任意の曲をタイムラインに合わせて流す） ----------
+const audio=new Audio();let hasBgm=false,gainS=0;
+const MUSIC_END=segs.find(s=>s.type==='still').start;
+$('bgm').onchange=e=>{const f=e.target.files[0];if(!f)return;audio.src=URL.createObjectURL(f);hasBgm=true;$('bgmName').textContent=f.name;};
+function musicGain(t){
+  if(t<ZERO||t>=MUSIC_END)return 0;
+  let g=Math.min(1,t-ZERO,(MUSIC_END-t)/2);
+  const s=segs.find(x=>t>=x.start&&t<x.end);
+  if($('duck').checked&&s&&s.type==='person'&&s.voice)g*=0.3;
+  return g;
+}
+function syncMusic(){
+  if(!hasBgm)return;
+  const want=playing&&t>=ZERO&&t<MUSIC_END,pos=(t-ZERO)+(+$('ofs').value||0);
+  if(want){
+    audio.playbackRate=speed;
+    if(Math.abs(audio.currentTime-pos)>0.3)audio.currentTime=pos;
+    if(audio.paused)audio.play().catch(()=>{});
+  }else if(!audio.paused)audio.pause();
+  gainS+=(musicGain(t)-gainS)*0.05;
+  audio.volume=clamp(gainS*(+$('vol').value),0,1);
+}
+function frame(now){
+  if(playing){t+=(now-last)/1000*speed;if(t>=TOTAL){t=TOTAL;playing=false;updBtn();}}
+  last=now;render(t);syncMusic();
+  fillEl.style.width=(t/TOTAL*100)+'%';
+  tcEl.textContent=(t<ZERO?'1本目ラスト':'2本目 '+fmt(t-ZERO))+' / '+fmt(TOTAL-ZERO);
+  let ci=0;chapters.forEach((c,i)=>{if(t>=c.t)ci=i;});
+  [...chs.children].forEach((li,i)=>li.classList.toggle('cur',i===ci));
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
