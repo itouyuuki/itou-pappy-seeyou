@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vコンテ らら案ベース v1</title>
+<style>
+:root{--bg:#111;--fg:#eee;--muted:#9a9a9a;--accent:#f0b429;--line:#333;--warn:#ff8a65}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 8px}
+p.note{color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6}
+p.note b{color:var(--fg)}
+canvas#cv{width:100%;aspect-ratio:16/9;display:block;background:#000;border-radius:6px}
+#bar{position:relative;height:30px;margin-top:8px;background:#1b1b1b;border-radius:4px;cursor:pointer;overflow:hidden}
+#bar .seg{position:absolute;top:0;bottom:0;border-left:1px solid #000}
+#bar .head{position:absolute;top:0;bottom:0;width:2px;background:#fff}
+#bar .lbl{position:absolute;top:2px;font-size:10px;color:#fff;opacity:.75;pointer-events:none}
+.ctrl{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+button{background:#242424;color:var(--fg);border:1px solid #444;border-radius:6px;padding:6px 12px;font-size:14px;cursor:pointer}
+button.on{border-color:var(--accent);color:var(--accent)}
+#tc{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);min-width:170px}
+.music{font-size:13px;color:var(--muted)}
+.music input[type=number]{width:56px;background:#1c1c1c;color:var(--fg);border:1px solid #444;border-radius:4px;padding:3px}
+label.btn{background:#242424;color:var(--fg);border:1px solid #444;border-radius:6px;padding:6px 12px;font-size:14px;cursor:pointer}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.55;min-width:860px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:500;background:var(--bg)}
+td.n{font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+td.flag{color:var(--warn)}
+tr.sec td{color:var(--accent);font-weight:600;padding-top:14px}
+tr.cut{cursor:pointer}
+tr.cut:hover td{background:#1a1a1a}
+tr.cur td{background:#2a2412}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Vコンテ らら案ベース v1（今は1本目 3:06 だけ）</h1>
+  <p class="note">ららの仮動画の構成を骨組みにして、秒数は <b>動画タイムシート（10/24）</b> のとおり（1本目 17カット）。BGM はらら仮動画の曲で確定。2本目は後で出す。<br>
+  10/26 の変更：<b>1-01 冒頭</b>は、ぱっぴーとの思い出動画をランダムに並べる。0:12 までは同じ長さで流し、そこから1本ずつ短くして（前の絵がブレながら溶けて次へ）、最後はパパパッと写真のように切り替える。0:14.3〜0:15 は時計（約20度回りながら少し近づき、斜めのまま止まる）を入れてから LINE へ（参考：カロリーメイト「今」0:11〜0:15）。<br>
+  人＝シルエット（オレンジ＝ぱっぴー、青＝あさこ、緑＝らら、ピンク＝ちゃちゃ）、声＝字幕。セリフ・文言はすべて仮。オレンジ字の「要確認」は確認会で決めたいところ。スペースキーで再生／停止。</p>
+  <canvas id="cv"></canvas>
+  <div id="bar"></div>
+  <div class="ctrl">
+    <button id="play">▶ 再生</button>
+    <button id="restart">⟲ 最初から</button>
+    <button id="to2">2本目へ</button>
+    <button id="spd">1x</button>
+    <button id="ann" class="on">注釈</button>
+    <button id="shuffle">冒頭の思い出動画を引き直す</button>
+    <div id="tc"></div>
+  </div>
+  <div class="ctrl music">
+    <label class="btn">♪ 1本目の音<input type="file" accept="audio/*,video/mp4" id="bgm1" hidden></label>
+    <span id="bgm1Name">未選択（らら_仮動画_1本目.mp4）</span>
+    <span id="bgm2Wrap"><label class="btn">♪ 2本目の音<input type="file" accept="audio/*,video/mp4" id="bgm2" hidden></label>
+    <span id="bgm2Name">未選択（らら_仮動画_2本目.mp4）</span></span>
+    <label>音量 <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
+    <span id="clipStat">思い出動画：読み込み中…</span>
+  </div>
+  <p class="note">ららの仮動画を読み込むと、その曲で再生する。読み込んだ音はこのPCの中で再生するだけで、どこにも送られない。<br>
+</p>
+  <h2>カット表</h2>
+  <div class="tbl"><table><thead><tr><th>時間</th><th>No</th><th>秒</th><th>中身</th><th>画面・撮り方</th><th>音・セリフ</th><th>要確認・メモ</th></tr></thead><tbody id="cuts"></tbody></table></div>
+</div>
+<script>
+const cv=document.getElementById('cv');let ctx=cv.getContext('2d');
+const W=1280,H=720;cv.width=W;cv.height=H;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const smooth=u=>u*u*(3-2*u);
+const lerp=(a,b,k)=>a+(b-a)*k;
+const $=id=>document.getElementById(id);
+const FONT='system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif',HAND='"Segoe Print","Comic Sans MS","Yu Gothic UI",cursive';
+
+// ---------- 描画パーツ（v3 から流用） ----------
+const INK='#26242e';
+const GLOW={pappy:'rgba(255,140,40,.95)',asako:'rgba(90,160,255,.95)',rara:'rgba(110,210,140,.95)',chacha:'rgba(240,120,170,.95)',guest:'rgba(200,200,200,.6)'};
+function bgGrad(a,b,y0=0,y1=H){const g=ctx.createLinearGradient(0,y0,0,y1);g.addColorStop(0,a);g.addColorStop(1,b);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h);}
+function rrect(x,y,w,h,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();}
+function poly(pts,c){ctx.fillStyle=c;ctx.beginPath();pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();}
+function circ(x,y,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
+function line(x1,y1,x2,y2,w,c){ctx.strokeStyle=c;ctx.lineWidth=w;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+function text(t,x,y,size,color,align='center',weight=500,font=FONT){ctx.font=`${weight} ${size}px ${font}`;ctx.fillStyle=color;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(t,x,y);}
+function shadowText(t,x,y,size,align='center',weight=500){ctx.save();ctx.shadowColor='rgba(0,0,0,.7)';ctx.shadowBlur=10;text(t,x,y,size,'#fff',align,weight);ctx.restore();}
+function hand(t,x,y,size,color='#fff',a=1){ctx.save();ctx.globalAlpha=a;ctx.translate(x,y);ctx.rotate(-.03);text(t,0,0,size,color,'center',400,HAND);ctx.restore();}
+function subtitle(t,who){ctx.font=`500 30px ${FONT}`;const w=ctx.measureText(t).width+48;ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(640-w/2,620,w,54);text(t,640,647,30,'#fff');if(who)shadowText(who,640,598,16);}
+function black(a){if(a<=0)return;ctx.fillStyle=`rgba(0,0,0,${clamp(a,0,1)})`;ctx.fillRect(0,0,W,H);}
+function vignette(a){const g=ctx.createRadialGradient(640,360,220,640,360,820);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,`rgba(0,0,0,${a})`);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+function glow(who,blur=16){if(who&&GLOW[who]){ctx.shadowColor=GLOW[who];ctx.shadowBlur=blur;}else ctx.shadowBlur=0;}
+function fade(u,a=.12,b=.12){return clamp(u/a,0,1)*clamp((1-u)/b,0,1);}
+
+// 全身。y＝足もと。pose: stand/walk/run/sit/wave/cheers/lie/slump。view: front/back/left/right
+function fig(x,y,s,o={}){
+  const t=o.t||0,pose=o.pose||'stand',view=o.view||'front',d=view==='left'?-1:1,ph=t*(pose==='run'?11:6);
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
+  if(pose==='lie')ctx.rotate(-Math.PI/2);
+  glow(o.who);ctx.strokeStyle=ctx.fillStyle=o.color||INK;ctx.lineCap='round';ctx.lineJoin='round';
+  const sitting=pose==='sit'||pose==='slump',hip=sitting?-40:-82,sh=hip-64+(pose==='slump'?14:0),side=view==='left'||view==='right';
+  const L=(x1,y1,x2,y2,w)=>{ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();};
+  const P=(pts,w)=>{ctx.lineWidth=w;ctx.beginPath();pts.forEach(([a,b],i)=>i?ctx.lineTo(a,b):ctx.moveTo(a,b));ctx.stroke();};
+  if(pose==='run'||pose==='walk'){
+    const a=Math.sin(ph)*(pose==='run'?.75:.35);
+    for(const sg of [1,-1]){const b=a*sg,kx=Math.sin(b)*44,ky=hip+Math.cos(b)*44;P([[sg*(side?2:8),hip],[side?kx*d:sg*8+kx*.3,ky],[side?kx*d:sg*10+kx*.3,ky+40]],17);}
+  }else if(sitting){
+    if(side)P([[0,hip],[d*58,hip],[d*62,0]],17);else{P([[-10,hip],[-22,hip+14],[-24,0]],17);P([[10,hip],[22,hip+14],[24,0]],17);}
+  }else{L(-9,hip,-12,0,17);L(9,hip,12,0,17);}
+  const lean=pose==='slump'?(side?d*22:0):0;
+  L(0,hip,lean,sh+6,38);
+  if(pose==='run'||pose==='walk'){const a=Math.sin(ph)*(pose==='run'?.9:.4);for(const sg of [1,-1]){const b=-a*sg,ex=sg*(side?3:16)+Math.sin(b)*30*(side?d:.4);P([[sg*(side?3:14),sh],[ex,sh+28],[ex,sh+54]],13);}}
+  else if(pose==='wave'){P([[-14,sh],[-20,sh+34],[-20,sh+62]],13);P([[14,sh],[40,sh-26],[46+Math.sin(t*9)*14,sh-62]],13);}
+  else if(pose==='cheers'){P([[-14,sh],[-38,sh-30],[-44,sh-68]],13);P([[14,sh],[38,sh-30],[44,sh-68]],13);}
+  else if(pose==='slump'){P([[lean-12,sh],[lean-16,sh+36],[side?d*40:-14,hip+6]],13);P([[lean+12,sh],[lean+16,sh+36],[side?d*48:14,hip+6]],13);}
+  else if(sitting&&side){P([[0,sh],[d*24,sh+30],[d*44,sh+36]],13);}
+  else{P([[-14,sh],[-20,sh+34],[-20,sh+62]],13);P([[14,sh],[20,sh+34],[20,sh+62]],13);}
+  const hx=(side?d*3:0)+lean*1.4,hy=sh-30+(pose==='slump'?14:0);ctx.beginPath();ctx.arc(hx,hy,25,0,Math.PI*2);ctx.fill();
+  if(side){ctx.beginPath();ctx.moveTo(hx+d*21,hy-4);ctx.lineTo(hx+d*29,hy+4);ctx.lineTo(hx+d*20,hy+9);ctx.fill();}
+  if(view==='back'){ctx.fillStyle='rgba(0,0,0,.35)';ctx.shadowBlur=0;ctx.beginPath();ctx.arc(hx,hy-4,23,Math.PI*1.05,Math.PI*1.95);ctx.fill();}
+  ctx.restore();
+}
+// 寄りの上半身
+function bust(x,y,s,o={}){
+  const view=o.view||'front',d=view==='left'?-1:1,side=view==='left'||view==='right',t=o.t||0,down=o.down||0;
+  ctx.save();ctx.translate(x,y+(o.bob?Math.sin(t*o.bob)*4:0));ctx.scale(s,s);
+  glow(o.who,26);ctx.fillStyle=o.color||INK;
+  ctx.beginPath();ctx.ellipse(side?-d*20:0,330,side?190:250,170,0,Math.PI,0);ctx.fill();
+  ctx.fillRect(-45,120,90,100);
+  ctx.save();ctx.translate(0,down*40);ctx.rotate(side?d*down*.35:0);
+  ctx.beginPath();ctx.ellipse(side?d*8:0,40,side?104:110,128,0,0,Math.PI*2);ctx.fill();
+  if(side){ctx.beginPath();ctx.moveTo(d*100,10);ctx.lineTo(d*132,52);ctx.lineTo(d*100,62);ctx.fill();ctx.beginPath();ctx.moveTo(d*96,88);ctx.lineTo(d*112,96);ctx.lineTo(d*90,128);ctx.fill();}
+  if(view==='back'){ctx.shadowBlur=0;ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(0,20,104,118,0,Math.PI,0);ctx.fill();}
+  ctx.restore();ctx.restore();
+}
+function arm(x0,y0,x1,y1,w,c=INK){line(x0,y0,x1,y1,w,c);circ(x1,y1,w*.62,c);}
+// スマホ（LINE 風の画面）。msgs=[[me,文字]]、k=何件目まで出すか
+// 右手で持つ：手のひらと腕は端末の後ろ（右下から）、指は左の縁、親指は右の縁にかかる
+const SKIN='#d9a882',SKIN2='#c48f69';
+function handBack(){ctx.save();ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=30;line(150,260,520,900,230,SKIN2);rrect(-120,90,330,330,140,SKIN);ctx.restore();}
+function handFront(){
+  [[-40,46],[40,48],[118,44]].forEach(([y,h])=>{ctx.save();ctx.translate(-168,y);ctx.rotate(-.12);rrect(-34,-h/2,62,h,h/2,SKIN);rrect(-6,-h/2+6,22,h-12,(h-12)/2,'rgba(255,255,255,.18)');ctx.restore();});
+  ctx.save();ctx.translate(170,150);ctx.rotate(-.55);rrect(-40,-30,170,64,32,SKIN);rrect(-44,-22,46,48,22,SKIN2);rrect(-40,-24,40,40,18,'#e8bfa0');ctx.restore();
+}
+// 壁の付箋が増えていく（伊藤案 v3 の演出）。k＝0〜1
+function stickyWall(k,t){
+  rect(0,0,W,H,'#d8d2c6');const n=Math.floor(k*26),S=['飲み会','寄せ書き','アルバム','旅行','手紙','動画？','花束','写真','色紙','サプライズ','ケーキ','お守り','似顔絵'];
+  for(let i=0;i<n;i++){const x=170+(i*137)%880,y=70+(i*71)%300;ctx.save();ctx.translate(x+45,y+45);ctx.rotate(((i*29)%7-3)*.03);rect(-45,-45,90,90,['#fff17a','#ffb3c7','#9fe0ff'][i%3]);text(S[i%S.length],0,0,15,'#444');ctx.restore();}
+  fig(640,700,2.3,{view:'back',who:'asako',t});
+}
+// SNS を流し見する画面（手で持つ）。7番目の投稿が塗り絵キャンバス。u＝カットの進み（.62 で指が止まる）
+function feedScene(u,t){
+  deskRoom(true);black(.55);screenGlow(620,360,520,'rgba(160,200,255,.22)');
+  const STOP=.62,SP=7,PH=250,target=SP*PH-150,k=clamp((u-.52)/(STOP-.52),0,1),off=lerp(target-1500,target,1-Math.pow(1-k,3));
+  const z=u>STOP?lerp(1,1.25,smooth(clamp((u-STOP)/.2,0,1))):1;
+  ctx.save();ctx.translate(600,400);ctx.scale(z,z);ctx.translate(-600,-400);
+  const sx=Math.sin(t*1.7)*4,sy=Math.cos(t*1.3)*3;
+  ctx.save();ctx.translate(600+sx,400+sy);ctx.rotate(-.1);ctx.scale(.92,.92);handBack();
+  rrect(-170,-330,340,660,40,'#111');ctx.save();ctx.beginPath();ctx.roundRect(-155,-300,310,600,22);ctx.clip();rect(-155,-300,310,600,'#fafafa');
+  for(let i=0;i<12;i++){const y=-240+i*PH-off;if(y<-560||y>340)continue;circ(-128,y,14,PAL[(i*3)%PAL.length]);rect(-106,y-6,90,10,'#ccc');
+    if(i===SP){rect(-145,y+24,290,180,'#efe7da');board(-60,y+114,150,1);text('写真が塗り絵に',60,y+90,16,'#222','center',700);text('なるキャンバス',60,y+114,16,'#222','center',700);text('Paint Yours',60,y+146,13,'#777');}
+    else{rect(-145,y+24,290,180,PAL[(i*5+2)%PAL.length]);circ(-60+(i*53)%120,y+110,30,'rgba(255,255,255,.5)');}}
+  rect(-155,-300,310,54,'#fff');text('おすすめ',0,-273,18,'#222','center',700);ctx.restore();
+  handFront();ctx.restore();
+  if(u>STOP)screenGlow(600,380,380,`rgba(255,220,120,${.3*clamp((u-STOP)/.08,0,1)})`);
+  ctx.restore();
+}
+function phone(x,y,s,msgs,k,o={}){
+  ctx.save();ctx.translate(x,y);ctx.rotate(o.rot||0);ctx.scale(s,s);
+  if(o.hand)handBack();
+  rrect(-170,-330,340,660,40,'#111');rrect(-155,-300,310,600,22,'#8eaed8');
+  rect(-155,-300,310,54,'#2c3e57');text(o.title||'',0,-273,20,'#fff');
+  let yy=-220;msgs.forEach(([me,str],i)=>{if(i+1>k+.999)return;ctx.globalAlpha=clamp(k-i,0,1);ctx.font=`500 20px ${FONT}`;const w=Math.min(270,ctx.measureText(str).width+30);
+    const bx=me?140-w:-140;rrect(bx,yy,w,44,18,me?'#8de055':'#fff');text(str,bx+w/2,yy+23,20,'#111');ctx.globalAlpha=1;yy+=62;});
+  if(o.hand)handFront();
+  ctx.restore();
+}
+function laptop(x,y,s,screen){
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
+  rrect(-300,-370,600,380,14,'#1d1f24');ctx.save();ctx.beginPath();ctx.rect(-280,-350,560,340);ctx.clip();screen(-280,-350,560,340);ctx.restore();
+  poly([[-330,10],[330,10],[370,40],[-370,40]],'#3a3d44');ctx.restore();
+}
+function screenGlow(x,y,r,c='rgba(160,200,255,.35)'){const g=ctx.createRadialGradient(x,y,10,x,y,r);g.addColorStop(0,c);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+function deskRoom(night){bgGrad(night?'#14161d':'#d9d4ca',night?'#0b0c10':'#a39c90');rect(0,520,W,200,night?'#1c1a17':'#6d5a44');}
+const PAL=['#f2c6a0','#9cc3e6','#a8d5a2','#f4b6c2','#f5d58a','#c9b8e8','#9fd8d0','#e8a07a'];
+// 編集画面。prog＝プレビューの仕上がり
+function editor(prog,ph){
+  rect(0,0,W,H,'#1f2126');rect(0,0,W,40,'#2b2e35');text('ぱっぴーへ_2本目（編集中）',20,20,16,'#ddd','left');
+  rect(60,60,760,428,'#000');board(440,274,380,prog);
+  rect(840,60,380,428,'#26292f');text('素材',860,80,14,'#aaa','left');for(let i=0;i<12;i++)rect(860+(i%3)*118,100+Math.floor(i/3)*90,108,70,['#5d7a96','#8a6a52','#5f7f5a','#7a6b98'][i%4]);
+  rect(60,510,1160,190,'#2b2e35');['V1','V2','A1'].forEach((s,r)=>{text(s,72,545+r*50,13,'#888','left');rect(100,530+r*50,1100,34,'#33363e');});
+  const n=Math.floor(prog*10);for(let i=0;i<n;i++){rect(104+i*108,532,102,30,['#5d8fc4','#d9895b','#5e9e57'][i%3]);if(i%2)rect(104+i*108,582,100,30,'#7a6bb0');}
+  rect(104,632,Math.min(1090,n*108),30,'#3f7f6b');line(104+ph*1090,515,104+ph*1090,695,3,'#e33');
+}
+// 塗り絵のキャンバス（正方形）。prog＝塗り終わった割合。中心 x,y、一辺 s
+function board(x,y,s,prog,o={}){
+  const G=10,cs=s/G,x0=x-s/2,y0=y-s/2,N=G*G,k=Math.floor(prog*N);
+  rect(x0-6,y0-6,s+12,s+12,'#d9cdb6');rect(x0,y0,s,s,'#fbfaf6');
+  for(let i=0;i<N;i++){const j=(i*37)%N,cx=x0+(j%G)*cs,cy=y0+Math.floor(j/G)*cs;
+    if(i<k)rect(cx,cy,cs+.5,cs+.5,PAL[(j*3+Math.floor(j/G))%PAL.length]);
+    else{ctx.strokeStyle='rgba(0,0,0,.12)';ctx.lineWidth=1;ctx.strokeRect(cx+.5,cy+.5,cs-1,cs-1);if(s>300)text(String(1+(j*7)%8),cx+cs/2,cy+cs/2,Math.max(9,cs*.25),'rgba(0,0,0,.25)');}}
+}
+function boardBack(x,y,s){rect(x-s/2,y-s/2,s,s,'#a8865a');rect(x-s/2+s*.08,y-s/2+s*.08,s*.84,s*.84,'#8a6b45');}
+function brushHand(x,y,t,from=[1100,900]){arm(from[0],from[1],x+Math.sin(t*9)*18,y+Math.cos(t*7)*10,52);line(x+Math.sin(t*9)*18,y+Math.cos(t*7)*10,x+Math.sin(t*9)*18-40,y+Math.cos(t*7)*10-40,8,'#c9a26b');}
+
+// ---------- 思い出動画（仮素材。ランダムに並べる） ----------
+const MEM={
+  beach:(u,t)=>{bgGrad('#bfe0f0','#e8f3f7',0,300);rect(0,300,W,140,'#4a8db0');for(let i=0;i<3;i++)rect(0,430+i*14+Math.sin(t*2+i)*5,W,6,'rgba(255,255,255,.55)');rect(0,470,W,250,'#e9d9b5');const k=smooth(u);fig(lerp(560,680,k),lerp(690,560,k),lerp(1.5,.8,k),{pose:'run',view:'back',who:'pappy',t});},
+  laugh:(u,t)=>{bgGrad('#f3dcc6','#c09a7b');bust(880,280,1.1,{who:'pappy',bob:14,t});},
+  river:(u,t)=>{bgGrad('#f7b267','#f4845f',0,380);circ(820,330,70,'#ffe2a8');rect(0,380,W,90,'#d77a55');poly([[0,470],[W,470],[W,H],[0,H]],'#3b3a2c');fig(560,660,1.5,{pose:'sit',view:'back',who:'pappy',color:'#16151a'});fig(700,660,1.5,{pose:'sit',view:'back',color:'#16151a'});},
+  wave:(u,t)=>{bgGrad('#e9e1f2','#b9aacd');poly([[560,330],[720,330],[1280,720],[0,720]],'#8a8496');u<.45?fig(640,650,2.2,{pose:'walk',view:'back',who:'pappy',t}):fig(640,650,2.2,{pose:'wave',who:'pappy',t});},
+  takibi:(u,t)=>{rect(0,0,W,H,'#0b0a12');for(let i=0;i<60;i++)circ((i*211)%W,(i*97)%330,1.5,'rgba(255,255,255,.6)');rect(0,560,W,160,'#15130f');screenGlow(640,560,420,'rgba(255,140,40,.45)');for(let i=0;i<5;i++){const f=Math.sin(t*12+i*2)*14;poly([[600+i*20,580],[610+i*20+f*.3,500-i%2*30+f],[625+i*20,580]],i%2?'#ffb347':'#ff6a2b');}fig(420,600,1.7,{pose:'sit',view:'right',who:'pappy',t});fig(860,600,1.7,{pose:'sit',view:'left',t});},
+  piano:(u,t)=>{bgGrad('#e8dccb','#b9a58c');rect(0,560,W,160,'#7a5f44');rect(260,300,560,260,'#1b1b1f');rect(280,420,520,46,'#f4f1ea');for(let i=0;i<20;i++)line(280+i*26,420,280+i*26,466,1,'#999');for(let i=0;i<14;i++)if(i%7!==2&&i%7!==6)rect(296+i*37,420,16,28,'#111');fig(930,640,2,{pose:'sit',view:'left',who:'pappy',t});},
+  snow:(u,t)=>{bgGrad('#c6d2e4','#eef2f8',0,430);rect(0,430,W,290,'#fafcff');for(let i=0;i<120;i++)circ((i*97.3+t*20)%W,((i*53.7)+t*80)%H,2+i%3,'rgba(255,255,255,.9)');fig(640,640,2.2,{pose:'cheers',who:'pappy',t});},
+  party:(u,t)=>{bgGrad('#f3c98b','#b8743f');for(let i=0;i<9;i++)circ(140+i*125,90+Math.sin(i)*20,10,PAL[i%PAL.length]);[440,640,840].forEach((x,i)=>fig(x,650,1.9,{pose:i===1?'cheers':'wave',who:i===1?'pappy':null,t:t+i}));},
+};
+const MEMK=Object.keys(MEM),MEMNAME={beach:'海',laugh:'笑顔',river:'河川敷',wave:'手を振る',takibi:'たき火',piano:'ピアノ',snow:'雪',party:'みんなで'};
+
+// 冒頭：ランダムに並べる。ACCEL 秒（ナレ「そのうち」）までは同じ長さ、そこから1本ずつ短くしていき、最後はパパパッ
+// CLOCK_AT 秒からは時計の斜め回転（参考：カロリーメイト「今」0:14〜0:15）
+// 加速は 0:12 から。時計は 0:14.3 から（BGM の最後のカチッは 13.89秒。高音域で実測）。時計は控えめに回って斜めで止まり、LINE へ
+const ACCEL=12,CLOCK_AT=14.3,STEADY=2.2;
+let seed=7,MONT=[];
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+// ぼかし：小さいキャンバスに描いて引き伸ばす（ctx.filter の blur は重くてカクつくため）
+const oc=document.createElement('canvas'),ox=oc.getContext('2d');
+function blurred(px,fn){
+  if(px<1){fn();return;}
+  const f=clamp(1/(1+px*.45),.08,1),w=Math.max(16,Math.round(W*f)),h=Math.round(H*f),main=ctx;
+  if(oc.width!==w||oc.height!==h){oc.width=w;oc.height=h;}else ox.clearRect(0,0,w,h);
+  ox.setTransform(w/W,0,0,h/H,0,0);ctx=ox;try{fn();}finally{ctx=main;}
+  ctx.imageSmoothingEnabled=true;ctx.drawImage(oc,0,0,W,H);
+}
+// 思い出動画1本を描く。blur＝ぼかし(px)、dx＝横ブレ
+// 実際のぱっぴーの動画：素材フォルダの短縮版（各動画の真ん中 2.6秒・640×360・音なし）。
+// 動画はリポジトリに入れない（秘密保持）ので、このPCでだけ映る。読めないときは仮の絵で描く
+const CLIP_DIR=new URLSearchParams(location.search).get('clips')||'file:///C:/Users/yuuki/OneDrive/ドキュメント/pappi/動画素材/_vコンテ用/',CLIP_LEN=2.6;
+const CLIP_FILES=['0178b46e-a395-4d6b-9f60-c8579c3312ea','7279bca4-cf8c-46d6-9ef0-f0200ca09a9a','814436555.207824','814436666.971966','814436669.299034','814436687.747174','814436714.612718','814436722.422158','814436730.037580','814436743.914093','IMG_0848','IMG_0863','IMG_0864','IMG_0865','IMG_0867','IMG_0873','IMG_0875','IMG_0876','IMG_0888','IMG_0889','IMG_0892','af690d90-72d6-4da9-b044-864961ed1e52','b3a2d102-0736-46a9-8f4b-d9156a109314','c5809e1f-9f1d-4388-8406-5bf73a397d7f'];
+const VIDS=CLIP_FILES.map(n=>{const v=document.createElement('video');v.muted=true;v.preload='auto';v.playsInline=true;v.ok=false;
+  v.addEventListener('loadeddata',()=>{v.ok=true;clipStat();});v.addEventListener('error',clipStat);v.src=CLIP_DIR+n+'.mp4';return v;});
+function clipStat(){const n=VIDS.filter(v=>v.ok).length,el=document.getElementById('clipStat');if(el)el.textContent=n?`思い出動画：${n}本読み込み済み（素材フォルダの短縮版）`:'思い出動画：素材フォルダが見つからないので仮の絵で表示中';}
+let usedVids=new Set();
+// 再生中は動画をそのまま流し、止めているときやずれたときはその位置へ合わせる
+function syncVid(v,want){
+  usedVids.add(v);
+  if(playing){v.playbackRate=speed;if(Math.abs(v.currentTime-want)>.25)v.currentTime=want;if(v.paused)v.play().catch(()=>{});}
+  else{if(!v.paused)v.pause();if(Math.abs(v.currentTime-want)>.04)v.currentTime=want;}
+}
+function memClip(c,cu,t,blur,dx=0){
+  const v=VIDS[c.v],real=v&&v.ok;
+  if(real)syncVid(v,clamp(cu*c.dur,0,CLIP_LEN-.05));
+  blurred(blur,()=>{ctx.save();const z=1+cu*.05;ctx.translate(640+dx,360);ctx.scale(z,z);ctx.translate(-640,-360);if(real)ctx.drawImage(v,0,0,W,H);else MEM[c.m](cu,t+c.ph*10);ctx.restore();});
+}
+// 時計の斜め回転：回りながら近づいて（SPIN 秒）、斜めのまま止まり、ゆっくり寄り続けて次のカットへ。e＝経過秒
+// 参考（カロリーメイト「今」）：14.27秒 約2.5倍・約20度 → 14.33秒 約1.7倍・約10度 → 14.45秒 等倍・約8度で止まる → 約0.3秒見せてカット
+// 10/26 伊藤：回転は少し付ける。大きさは等倍くらいのまま、少しだけ近づく。時計は 0.7秒
+const SPIN=.35;
+function clockSpin(e,t){
+  const k=1-Math.pow(1-clamp(e/SPIN,0,1),3);   // 最初が速く、すっと止まる
+  const push=clamp((e-SPIN)/(P1[0].d-CLOCK_AT-SPIN),0,1);   // 止まった後もゆっくり寄る
+  blurred(lerp(6,0,k),()=>clockFace(k,t,lerp(1,1.15,k)+push*.05));
+}
+function clockFace(k,t,z){
+  rect(0,0,W,H,'#cfcabf');
+  ctx.save();ctx.translate(640,360);ctx.rotate(lerp(-.5,-.14,k));ctx.scale(z,z);
+  rect(-900,-900,1800,1800,'#d8d3c8');for(let i=0;i<10;i++)rect(-900,-900+i*190,1800,2,'rgba(0,0,0,.05)');
+  circ(6,10,212,'rgba(0,0,0,.18)');circ(0,0,210,'#f4f4f2');circ(0,0,196,'#fff');
+  for(let i=1;i<=12;i++){const a=i/12*Math.PI*2-Math.PI/2;text(String(i),Math.cos(a)*158,Math.sin(a)*158,34,'#222','center',500);}
+  for(let i=0;i<60;i++){const a=i/60*Math.PI*2;line(Math.cos(a)*184,Math.sin(a)*184,Math.cos(a)*(i%5?178:170),Math.sin(a)*(i%5?178:170),i%5?1.5:3,'#333');}
+  const H1=(2+28/60)/12*Math.PI*2-Math.PI/2,M1=28/60*Math.PI*2-Math.PI/2;   // 2:28 で止まった針（参考動画の時計に近い位置）
+  line(0,0,Math.cos(H1)*100,Math.sin(H1)*100,9,'#222');line(0,0,Math.cos(M1)*150,Math.sin(M1)*150,6,'#222');
+  const S1=(Math.floor(t)%60)/60*Math.PI*2-Math.PI/2;line(0,0,Math.cos(S1)*165,Math.sin(S1)*165,2,'#c33');circ(0,0,8,'#222');
+  ctx.restore();
+}
+function buildMontage(D){
+  const head=[],n=Math.round(ACCEL/STEADY);for(let i=0;i<n;i++)head.push(ACCEL/n);   // 早送り前：同じ長さ
+  const R=CLOCK_AT-ACCEL,ds=[];let d=R*.27;
+  while(d>.14){ds.push(d);d*=.7;}           // だんだん短く
+  let s=ds.reduce((a,b)=>a+b,0);
+  while(s<R*.97){ds.push(.1);s+=.1;}         // 最後はパパパッ（約0.1秒ずつ）
+  const k=R/s;MONT=[];let st=0,prev='';
+  const order=CLIP_FILES.map((_,i)=>[rnd(),i]).sort((a,b)=>a[0]-b[0]).map(a=>a[1]);   // 同じ動画は1回だけ
+  head.concat(ds.map(x=>x*k)).forEach((x,i)=>{let m;do{m=MEMK[Math.floor(rnd()*MEMK.length)];}while(m===prev);prev=m;MONT.push({start:st,dur:x,m,v:order[i%order.length],ph:rnd()});st+=x;});
+}
+
+// ---------- 色塗りシーン ----------
+// 画角は人ごとに変える（伊藤：飽きさせない）。らら補足：メッセージ動画をメインにして色塗りをワイプにしてもよい
+const ANG=['真上から手元','横から（顔と手）','正面から顔（キャンバスの裏ごし）','引き（場所ごと）','メッセージ動画がメイン＋色塗りはワイプ'];
+const PEOPLE=18;
+function paintTop(n,u,t,hide){
+  rect(0,0,W,H,'#8a6b4a');const p=lerp((n-1)/PEOPLE,n/PEOPLE,u);
+  if(hide){ctx.save();ctx.translate(640,360);ctx.scale(2.6,2.6);ctx.translate(-640,-360);board(640,360,520,p);ctx.restore();brushHand(700,330,t);}
+  else{board(640,360,520,p);brushHand(720,330,t);}
+}
+function paintScene(n,ang,u,t,hide){
+  const p=lerp((n-1)/PEOPLE,n/PEOPLE,u);
+  if(ang===0)paintTop(n,u,t,hide);
+  else if(ang===1){bgGrad('#dfe6ea','#a9b4ba');rect(0,520,W,200,'#6b5a48');if(hide)rect(390,250,22,280,'#a8865a');else board(400,390,260,p);fig(800,640,2.2,{pose:'sit',view:'left',who:'guest',t});arm(720,460,430+Math.sin(t*8)*10,400,26);}
+  else if(ang===2){bgGrad('#efe3d0','#b89c78');bust(640,250,.95,{who:'guest',down:.45});boardBack(640,640,560);arm(380,720,560+Math.sin(t*8)*20,470,40);}
+  else if(ang===3){bgGrad('#cfe0c8','#8fae8a',0,420);rect(0,420,W,300,'#9a8a6e');rect(760,140,300,200,'#e9f2f6');rect(450,470,380,20,'#5b4632');fig(640,560,1.3,{pose:'sit',view:'front',who:'guest',t});board(640,462,90,p);}
+  else{bgGrad('#2e3440','#151820');bust(560,260,1.05,{who:'guest',bob:6,t});rect(860,110,380,214,'#000');ctx.save();ctx.beginPath();ctx.rect(862,112,376,210);ctx.clip();ctx.translate(862,112);ctx.scale(376/W,210/H);paintTop(n,u,t,hide);ctx.restore();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.strokeRect(860,110,380,214);if(u>.15)subtitle('（ぱっぴーへのメッセージ）','');}
+  shadowText(`${n}人目（仮）`,40,112,22,'left',600);shadowText('画角：'+ANG[ang],40,140,16,'left');
+}
+// 「出来ました〜」：完成した絵を持って見せる
+function doneShow(n,u,t){bgGrad('#efe3d0','#b89c78');bust(640,180,.7,{who:'guest'});board(640,450,380,n/PEOPLE);arm(380,720,460,560,40);arm(900,720,820,560,40);}
+
+// ---------- カット ----------
+// d＝秒（タイムシートどおり）、what＝中身、scr＝画面・撮り方、snd＝音・セリフ、flag＝要確認、memo＝メモ、lines＝[[開始u,終了u,字幕,話す人]]
+const P1=[
+{id:'1-01',d:15,what:'ぱっぴーとの思い出動画をランダムに並べる。0:12 から1本ずつ短くなり（ブレながら溶けるトランジション）、最後はパパパッ → 0:14.3 時計（約20度回りながら少し近づき、斜めのまま止まる）→ LINE へ',scr:'ぱっぴーの動画（素材フォルダの動画をランダムに並べる）＋壁掛け時計（実写）',snd:'イントロ。「長野生活は〜…なんであっという間なの」（時間のセリフ）',
+ memo:'10/26 伊藤の新しい案。参考：カロリーメイト「今」の 0:11〜0:15（加速 → 時計）。0:12 から早送り開始。らら案は「思い出写真に数字が重なる」。下の「引き直す」で並びが変わる',lines:[[.05,.5,'「長野生活は〜」（仮）',''],[.62,.93,'「…なんであっという間なの」（仮）','']],
+ draw:(u,lt,t)=>{
+   if(lt>=CLOCK_AT){clockSpin(lt-CLOCK_AT,t);ctx.save();ctx.globalAlpha=.75;text('壁掛け時計：回りながら近づき、斜めで止まる',W-30,H-30,15,'#fff','right');ctx.restore();return;}
+   const i=MONT.findIndex(m=>lt>=m.start&&lt<m.start+m.dur),c=MONT[i<0?MONT.length-1:i],cu=(lt-c.start)/c.dur,acc=c.start>=ACCEL-1e-6;
+   if(!acc)memClip(c,cu,t,0);
+   else{ // 加速部分：前の絵がブレながら溶けて次に入る＋全体に少しぼかし・白飛び
+     const p=MONT[i-1],tr=Math.min(.18,c.dur*.6),k=clamp((lt-c.start)/tr,0,1);
+     if(p&&k<1)memClip(p,1,t,10);
+     ctx.save();ctx.globalAlpha=k;memClip(c,cu,t,lerp(14,3,smooth(k)),lerp(60,0,smooth(k))*(i%2?1:-1));ctx.restore();
+     rect(0,0,W,H,`rgba(255,250,240,${.12+.18*(1-k)})`);
+   }
+   if(lt<.8)black(1-lt/.8);
+   ctx.save();ctx.globalAlpha=.75;text(`${VIDS[c.v]&&VIDS[c.v].ok?'素材：'+CLIP_FILES[c.v]:'思い出動画（'+MEMNAME[c.m]+'）'}　${c.dur.toFixed(2)}秒${acc?'　ブレながら溶ける':''}`,W-30,H-30,15,'#fff','right');ctx.restore();}},
+{id:'1-02',d:9,what:'LINE の画面：ぱっぴーの旅立ちを知る → あさこショック',scr:'スマホを手で持っているところを撮る（少し斜め・手持ち）→ 部屋でうなだれる（実写）',snd:'',memo:'10/26 伊藤：画面だけでなく、手で持っているように',
+ draw:(u,lt,t)=>{if(u<.55){deskRoom(true);black(.55);screenGlow(620,360,520,'rgba(160,200,255,.22)');
+   const sx=Math.sin(t*1.7)*5+Math.sin(t*3.1)*2,sy=Math.cos(t*1.3)*4;
+   phone(600+sx,400+sy,.92,[[0,'ちょっと話あるんだけど'],[0,'春から福島に行くことになった（仮）']],u/.45*2,{rot:-.13+Math.sin(t*1.1)*.012,hand:true});}else{deskRoom(true);screenGlow(700,470,220,'rgba(160,200,255,.25)');rect(380,520,520,80,'#3b3f52');fig(640,600,2,{pose:'slump',view:'right',who:'asako',t});ctx.globalAlpha=clamp((u-.6)/.1,0,1);shadowText('あさこショック',110,360,30,'left');ctx.globalAlpha=1;}}},
+{id:'1-03',d:3,what:'ららに「送別会やろう」と LINE',scr:'スマホの画面録画',snd:'',
+ draw:(u)=>{rect(0,0,W,H,'#1a1b20');phone(640,380,.95,[[1,'ぱっぴーの送別会やろう'],[0,'やろう！']],u*2.6,{title:'らら'});}},
+{id:'1-04',d:12,what:'あさこが内容を考える：「送別会　内容　思い出」で検索 → 壁の付箋が増えていく（まとまらない）→ スマホを流し見していて、塗り絵キャンバスの投稿で指が止まる（見つける）',
+ scr:'パソコンの画面録画（検索）→ 壁と付箋（タイムラプス・あさこの後ろ姿）→ スマホを手で持って SNS を流す（手元）',snd:'歌い出しから発案・準備へ。歌詞「見つける」で指が止まる',
+ memo:'10/26 伊藤：検索語を「送別会　内容　思い出」に。付箋は伊藤案 v3 の 0:50 あたりの演出。「見つける」は SNS を流していて指が止まる形に決定',
+ draw:(u,lt,t)=>{
+   if(u<.22){deskRoom(true);const k=u/.22,Q='送別会　内容　思い出';laptop(640,540,1,(x,y,w,h)=>{rect(x,y,w,h,'#fff');rrect(x+60,y+40,w-120,46,23,'#f1f3f4');text(Q.slice(0,Math.ceil(clamp(k/.6,0,1)*Q.length)),x+90,y+63,20,'#222','left');if(k>.7)for(let i=0;i<5;i++)rect(x+60,y+120+i*42,w-200-(i*40)%120,14,'#c9d3f0');});}
+   else if(u<.52)stickyWall((u-.22)/.3,t);
+   else feedScene(u,t);
+   if(u>.62){ctx.globalAlpha=clamp((u-.64)/.06,0,1);shadowText('♪「見つける」',1100,150,26,'right');ctx.globalAlpha=1;}}},
+{id:'1-05',d:9,what:'コメダで らら・ちゃちゃに相談（もしくは、みんなに声をかける）',scr:'実写（カフェ。3人を横から）',snd:'',
+ draw:(u,lt,t)=>{bgGrad('#c9a77c','#7a5434');rect(0,540,W,180,'#4a3322');rect(460,500,360,24,'#3a2618');fig(330,650,1.9,{pose:'sit',view:'right',who:'rara',t});fig(640,650,1.9,{pose:'sit',view:'front',who:'asako',t});fig(950,650,1.9,{pose:'sit',view:'left',who:'chacha',t});shadowText('コメダ',60,120,22,'left');if(u>.3)subtitle('「キャンバスをみんなに塗ってもらいたくて」（仮）','あさこ');}},
+{id:'1-06',d:9,what:'みんなに声をかける（LINE の画面か、直接か）',scr:'スマホの画面録画（ぱっぴー抜きのグループ）',snd:'',
+ draw:(u)=>{rect(0,0,W,H,'#1a1b20');phone(640,380,.95,[[1,'ぱっぴーには内緒で'],[1,'協力してほしい！'],[0,'いいよー'],[0,'なにやるの？'],[0,'のった']],u*5.5,{title:'（ぱっぴー抜きのグループ）'});}},
+{id:'1-07',d:12,what:'準備の様子。日にちが過ぎていく（カレンダーなど）',scr:'実写（タイムラプス）＋カレンダー',snd:'0:57 から曲調が変わる（ギターがアルペジオ）→ 時間が進む感覚',
+ draw:(u,lt,t)=>{deskRoom(true);screenGlow(380,380,300);fig(380,680,1.8,{pose:'sit',view:'back',who:'asako',t:t*3});const day=Math.floor(smooth(u)*90),mo=Math.floor(day/30);rect(760,120,360,400,'#fbfaf3');rect(760,120,360,70,'#c33');text(['○月','△月','□月','◇月'][mo],940,155,30,'#fff','center',700);text(String(day%30+1),940,350,160,'#222','center',700);}},
+{id:'1-08',d:9,what:'ぱっぴーとの思い出「動画あるといいねぇ〜」。あさこかちゃちゃが昔を思い出している感じ',scr:'思い出の動画か写真（少しセピア）',snd:'',memo:'らら：詰められる前に、思い出を入れる',lines:[[.25,.9,'「動画あるといいねぇ〜」','ぱっぴー（思い出の中）']],
+ draw:(u,lt,t)=>{rect(0,0,W,H,'#0d0d10');ctx.save();ctx.translate(240,90);ctx.scale(.62,.62);ctx.filter='sepia(.6)';MEM.takibi(u,t);ctx.restore();ctx.strokeStyle='#eee';ctx.lineWidth=8;ctx.strokeRect(240,90,794,446);}},
+{id:'1-09',d:3,what:'動画の進捗報告',scr:'パソコンの画面（編集中）',snd:'完全に無音になる前に入る（シリアス感）',lines:[[.1,1,'「動画、今こんな感じ」（仮）','あさこ']],
+ draw:(u)=>{editor(.3,u*.3);}},
+{id:'1-10',d:18,what:'ららから詰められる「動画がいいな〜」',scr:'実写（らら・あさこを横から → ららの肩越し）',snd:'1:22〜1:25 無音',lines:[[.08,.45,'「動画がいいな〜」','らら'],[.55,.95,'（詰められる。セリフは仮）','らら']],
+ draw:(u,lt,t)=>{if(u<.5){bgGrad('#d8c3a5','#8b7356');rect(0,520,W,200,'#5a4632');fig(380,640,2,{pose:'sit',view:'right',who:'rara',t});fig(900,640,2,{pose:'sit',view:'left',who:'asako',t});rect(520,500,240,24,'#3a2d20');}else{bgGrad('#4a4f5c','#23262e');bust(820,300,.8,{view:'left',who:'asako'});ctx.save();ctx.filter='blur(12px)';bust(230,380,1.2,{view:'back',who:'rara'});ctx.restore();}}},
+{id:'1-11',d:6,what:'無言の間。あさこは喋らず表情だけ',scr:'実写（あさこの顔に寄る）',snd:'1:37〜1:44 完全に無音（雨が止んだ後）',
+ cam:{z0:1,z1:1.12},draw:(u,lt,t)=>{bgGrad('#3c4250','#1a1d24');bust(640,280,1,{who:'asako',down:.2});}},
+{id:'1-12',d:12,what:'ここから喋る：あさこのやりたいことをしっとり話す',scr:'実写（あさこの顔〜胸）',snd:'音が鳴り始めたら話す',lines:[[.1,.95,'（あさこのやりたいこと。しっとり・仮）','あさこ']],
+ draw:(u,lt,t)=>{bgGrad('#4a4f5c','#23262e');screenGlow(640,300,500,'rgba(255,220,170,.18)');bust(640,270,1,{who:'asako',bob:3,t});}},
+{id:'1-13',d:3,what:'3人で「やるぞっ！」',scr:'実写（3人。引き）',snd:'歌い出しからの盛り上がり',lines:[[.1,1,'「やるぞっ！」','3人']],
+ draw:(u,lt,t)=>{bgGrad('#f0c27a','#c07a3a');[[400,'rara'],[640,'asako'],[880,'chacha']].forEach(([x,w])=>fig(x,660,2,{pose:u>.2?'cheers':'stand',who:w,t}));}},
+{id:'1-14',d:18,what:'動画編集＋その他の準備（キャンバスの発注、写真集めなど）',scr:'画面録画＋手元',snd:'',
+ draw:(u,lt,t)=>{if(u<.4)editor(lerp(.2,.6,u/.4),u/.4);else if(u<.7){deskRoom(true);laptop(640,540,1,(x,y,w,h)=>{rect(x,y,w,h,'#fff');board(x+130,y+150,200,1);text('カスタム塗り絵キャンバス',x+260,y+70,20,'#222','left');const dn=u>.6;rrect(x+260,y+180,220,50,10,dn?'#3aa16c':'#f0b429');text(dn?'注文完了':'注文を確定する',x+370,y+205,20,'#fff');});shadowText('キャンバスを発注',60,120,22,'left');}else editor(lerp(.6,.95,(u-.7)/.3),(u-.7)/.3);}},
+{id:'1-15',d:27,what:'ちゃちゃのガチメッセージ。あさこ・ちゃちゃの思い出写真',scr:'実写（ちゃちゃの顔〜胸）と、同期の思い出写真を交互に',snd:'',memo:'らら：メッセージは同期のちゃちゃとあさこだけ。ぱっぴーは同期を大事にしている',lines:[[.05,.33,'（ちゃちゃのガチメッセージ）','ちゃちゃ'],[.65,.97,'（ちゃちゃのガチメッセージ）','ちゃちゃ']],
+ draw:(u,lt,t)=>{if(u<.35||u>=.62){bgGrad('#3a3440','#1a171e');bust(640,270,1,{who:'chacha',bob:3,t});}else{rect(0,0,W,H,'#1a1a1a');const k=Math.floor((u-.35)/.27*3);for(let i=0;i<=k&&i<3;i++){ctx.save();ctx.translate(300+i*340,360);ctx.rotate((i-1)*.06);rect(-150,-180,300,360,'#fff');ctx.save();ctx.beginPath();ctx.rect(-135,-165,270,280);ctx.clip();rect(-135,-165,270,280,['#f3c98b','#bfe0f0','#cfe0c8'][i]);fig(-50,105,1,{who:'pappy'});fig(50,105,1,{who:i%2?'chacha':'asako'});ctx.restore();hand('同期の思い出（仮）',0,150,16,'#333');ctx.restore();}}}},
+{id:'1-16',d:15,what:'（らら案ではほぼ黒画面）→「長野生活は〜」で締める',scr:'黒地に文字',snd:'',flag:'ここに何を置くか未定',memo:'らら：「長野生活は〜」で締める。最初と最後を同じにする',
+ draw:(u)=>{rect(0,0,W,H,'#000');hand('「長野生活は〜」（締めのセリフ・仮）',640,360,40,'#fff',fade(u,.15,.2));}},
+{id:'1-17',d:6.2,what:'あさこのガチメッセージ →「それでは、動画をご覧下さい！」',scr:'実写（暗い中であさこの顔）',snd:'2:56〜3:06 無音（BGM が終わる）。音がないところで話して2本目へつなぐ',lines:[[.05,.65,'（あさこのガチメッセージ）','あさこ'],[.7,1,'「それでは、動画をご覧下さい！」','あさこ']],
+ draw:(u,lt,t)=>{rect(0,0,W,H,'#000');const k=smooth(clamp(u/.4,0,1));screenGlow(640,300,420,`rgba(90,110,150,${.35*k})`);ctx.globalAlpha=k;bust(640,290,1,{who:'asako'});ctx.globalAlpha=1;}},
+];
+const P2=[
+{id:'2-01',d:9,what:'音ありの思い出ムービー（たき火、ピアノなど）。笑っている動画からフェードアウトして曲へ',scr:'これまで撮ったぱっぴーの動画（その場の音つき）',snd:'曲の前。その場の笑い声',lines:[[.05,.8,'（笑い声）','']],
+ draw:(u,lt,t)=>{(u<.5?MEM.takibi:MEM.laugh)((u%.5)*2,t);black((u-.75)/.25);}},
+{id:'2-02',d:12,what:'字幕「パッピーが長野から旅立つ」「共に過ごせた時間に感謝を込めて」「みんなからの贈り物」',scr:'黒地に手書きの文字',snd:'',memo:'らら：「感謝を込めて作った」と言い切るのが泣かせどころ',
+ draw:(u)=>{rect(0,0,W,H,'#000');const S=['パッピーが長野から旅立つ','共に過ごせた時間に感謝を込めて','みんなからの贈り物'],i=Math.min(2,Math.floor(u*3));hand(S[i],640,360,46,'#fff',fade((u*3)%1,.2,.2));}},
+{id:'2-03',d:3,what:'開封シーン（数人で「喜んでくれるかな」と話しながら）',scr:'実写（真上から手元）',snd:'',lines:[[.1,1,'「パッピー喜んでくれるかな〜」','']],
+ draw:(u,lt,t)=>{rect(0,0,W,H,'#8a6b4a');rect(340,110,600,500,'#c8a46e');board(640,360,440,0);const k=smooth(u);rect(340,110-k*420,600,500*(1-k*.4),'#b8925a');arm(1150,800,900,480,50);arm(130,800,380,480,50);}},
+{id:'2-04',d:3,what:'「じゃあこれをみんなで塗ってこう！」（「みんな」が誰かは言わない）',scr:'実写（キャンバスを持ち上げる）',snd:'',lines:[[.05,1,'「じゃあこれをみんなで塗ってこう！」','']],
+ draw:(u)=>{bgGrad('#efe3d0','#b89c78');board(640,330,400,0);arm(300,720,440,420,44);arm(980,720,840,420,44);}},
+{id:'2-05',d:3,what:'1人目のところへ向かう（向かうシーンは1人目だけ）',scr:'実写（歩く後ろ姿か足元）',snd:'',memo:'らら：1人目だけ向かうところを見せると、その後も向かって書いてもらっていると想像できる',
+ draw:(u,lt,t)=>{bgGrad('#cfe3f2','#eaf2f7',0,400);rect(0,400,W,320,'#9a9a92');poly([[560,400],[720,400],[1000,720],[280,720]],'#b8b8b0');fig(640,lerp(700,560,u),lerp(2.2,1.6,u),{pose:'walk',view:'back',who:'asako',t});}},
+{id:'2-06',d:9,what:'1人目：足元と声だけで始めて、カメラを置いたところで誰か分かる → 色塗り →「出来ました〜」。手書きメッセージ「また会おう!!」',scr:'実写（足元 → 正面 → 手元 → 完成した絵）',snd:'',memo:'らら：誰だろう、のワクワク感',lines:[[.02,.28,'（声）「おじゃましまーす」（仮）',''],[.8,1,'「出来ました〜」','1人目']],
+ draw:(u,lt,t)=>{if(u<.3){rect(0,0,W,H,'#6b5a48');rect(0,500,W,220,'#8d7a62');for(const x of [520,700]){rrect(x+Math.sin(t*6+x)*10,560,120,50,20,'#26242e');rect(x+40+Math.sin(t*6+x)*10,330,40,240,'#26242e');}}
+   else if(u<.42){bgGrad('#efe3d0','#b89c78');bust(640,250,.95,{who:'guest'});ctx.globalAlpha=clamp((u-.3)/.05,0,1);shadowText('カメラを置く → 誰か分かる',640,120,24);ctx.globalAlpha=1;}
+   else if(u<.8)paintScene(1,0,(u-.42)/.38,t,false);
+   else{doneShow(1,u,t);hand('また会おう!!',1040,200,40,'#fff',clamp((u-.84)/.05,0,1));}}},
+{id:'2-07',d:6,what:'2人目：色塗り →「出来ました〜」',scr:'実写（画角は1人目と変える）',snd:'',lines:[[.72,1,'「出来ました〜」','2人目']],
+ draw:(u,lt,t)=>{if(u<.7)paintScene(2,1,u/.7,t,false);else doneShow(2,u,t);}},
+];
+// 3〜18人目：色塗りシーンのみ（タイムシートどおり 3〜17人目は 6.4秒、18人目は 6秒）
+for(let n=3;n<=PEOPLE;n++){const ang=[2,3,4,0,1][(n-3)%5];P2.push({id:'2-'+String(n+5).padStart(2,'0'),d:n<PEOPLE?6.4:6,what:`${n}人目：色塗りシーン（塗った後の絵は見せない）`,scr:'実写。画角：'+ANG[ang],snd:n===3?'3〜18人目で約1分42秒。1人約6秒':'',
+  flag:n===3?'会議（10/20）では「完成した絵は動画の中で見せる」と決めた。らら案は3人目以降、塗った後の絵を見せない':(n===PEOPLE?'出演者は18人か19人か（B-13）':''),
+  memo:n===3?'らら：喋ってもらってもよいが短い（約6秒）。直筆メッセージ＋少し言葉':'',draw:(u,lt,t)=>paintScene(n,ang,u,t,true)});}
+P2.push(
+{id:'2-24',d:6,what:'18人目から〇〇へ託され、〇〇は会場準備へ',scr:'実写（キャンバスを手渡す → 持って歩く）',snd:'',memo:'らら：送別会につながってきている感じ',
+ draw:(u,lt,t)=>{if(u<.5){bgGrad('#dfe6ea','#a9b4ba');rect(0,520,W,200,'#6b5a48');fig(420,660,2,{view:'right',who:'guest',t});fig(860,660,2,{view:'left',who:'asako',t});boardBack(lerp(520,740,smooth(u/.5)),420,160);}else{bgGrad('#3b3f52','#1d1f28',0,420);rect(0,420,W,300,'#2a2b33');fig(lerp(300,900,(u-.5)/.5),640,1.8,{pose:'walk',view:'right',who:'asako',t});boardBack(lerp(330,930,(u-.5)/.5),520,110);}}},
+{id:'2-25',d:6,what:'会場準備の後、ソワソワと待つ',scr:'実写（会場。引き）',snd:'',
+ draw:(u,lt,t)=>{bgGrad('#2a2630','#141218');rect(240,90,800,300,'#e9e6df');for(let r=0;r<3;r++)for(let c=0;c<8;c++)rect(200+c*115,470+r*70,70,40,'#4a4452');fig(640+Math.sin(t*1.5)*220,700,1.6,{pose:'walk',view:Math.cos(t*1.5)>0?'right':'left',who:'asako',t});}},
+{id:'2-26',d:3,what:'「今はグッバイ」でカメラを手で隠す → 暗転',scr:'実写（手がレンズをふさぐ）',snd:'2:41〜2:43 無音',lines:[[.05,.6,'♪「今はグッバイ」','']],
+ draw:(u,lt,t)=>{bgGrad('#2a2630','#141218');rect(240,90,800,300,'#e9e6df');const k=smooth(clamp(u/.6,0,1));circ(640,360,lerp(0,900,k),'#0a0909');}},
+{id:'2-27',d:21,what:'「パッピー、後ろを見てください！」→ ここでプレゼントを贈呈',scr:'無音の黒 → 会場の実写（その場で実物を手渡す）',snd:'無音からの盛り上がり。曲を手渡しの BGM に使う',flag:'渡し方：らら案は動画の途中で手渡す。過去の決定（D-05 上映→そのまま手渡し／D-15 ラストは完成した絵→絵が動く→フェードアウト）と違う',memo:'らら：1本目の発注 → 製作 → 渡すまでがきれいにつながる',
+ draw:(u,lt,t)=>{if(u<.28){rect(0,0,W,H,'#000');hand('パッピー、後ろを見てください！',640,360,46,'#fff',fade(u/.28,.2,.15));}else{const k=(u-.28)/.72;bgGrad('#3a2f38','#17131a');screenGlow(640,200,600,'rgba(255,200,140,.25)');for(let c=0;c<7;c++)fig(220+c*140,700,1.4,{pose:'sit',view:'back',t});fig(640,690,1.9,{pose:k>.3?'stand':'sit',view:k>.25?'back':'front',who:'pappy',t});const gx=lerp(1300,860,smooth(clamp(k/.5,0,1)));['asako','chacha','rara'].forEach((w,i)=>fig(gx+i*120,600,1.6,{pose:k>.6?'cheers':'walk',view:'left',who:w,t}));if(k<.6)board(gx-70,420,140,1);else board(640,380,lerp(140,260,clamp((k-.6)/.2,0,1)),1);}}},
+{id:'2-28',d:12,what:'「パッピーへ」メッセージを表示',scr:'黒地に文字（量も多めに）',snd:'',memo:'文言は仮。らら：よくあるけど、質も量もやる',
+ draw:(u)=>{rect(0,0,W,H,'#000');hand('パッピーへ',640,140,44,'#f6d27a',fade(u,.08,.1));const S=['楽しいことが沢山でした','この先の道も応援してるよ','またいつでもチームに戻ってきてね','一同より'];S.forEach((s,i)=>hand(s,640,250+i*90,i===3?28:36,'#fff',clamp((u-.12-i*.15)/.08,0,1)*clamp((1-u)/.1,0,1)));}},
+{id:'2-29',d:9,what:'アウトロ：みんなのサイン・メッセージをたくさん出す＋みんなの「パッピー」の声（人は映さない）',scr:'色塗り中に書いてもらったメッセージを並べる',snd:'3:13 からのしっとりしたアウトロ',lines:[[.1,.9,'（いろんな人の声）「パッピー！」','']],
+ draw:(u,lt,t)=>{rect(0,0,W,H,'#0c0c10');const n=Math.floor(u*22)+1;for(let i=0;i<n;i++){const x=120+(i*263)%1040,y=90+(i*151)%480;ctx.save();ctx.translate(x,y);ctx.rotate(((i*37)%9-4)*.02);rect(-90,-50,180,100,'#fbfaf3');hand(['ありがとう','またね！','福島でも元気で','また会おう!!','大好き','いってらっしゃい'][i%6],0,0,22,'#333');ctx.restore();}}},
+{id:'2-30',d:5.2,what:'あさこ・ちゃちゃ「パッピー」→「またね」',scr:'黒（声だけ）',snd:'3:26〜3:29 無音（BGM が終わる）',lines:[[.05,.5,'「パッピー」','あさこ・ちゃちゃ'],[.55,.95,'「またね」','あさこ・ちゃちゃ']],
+ draw:(u)=>{rect(0,0,W,H,'#000');}},
+);
+
+// ---------- タイムライン ----------
+// 今は1本目だけ作り替える（10/26）。2本目も出すときは SHOW2 を true にする
+const SHOW2=false;
+const segs=[];let T=0;
+[[1,P1],[2,P2]].filter(([p])=>p===1||SHOW2).forEach(([part,arr])=>arr.forEach(c=>{segs.push(Object.assign({part,start:T,end:T+c.d},c));T+=c.d;}));
+const TOTAL=T,T2=SHOW2?segs.find(s=>s.part===2).start:TOTAL;
+if(!SHOW2)['to2','bgm2Wrap'].forEach(id=>$(id).style.display='none');
+buildMontage(P1[0].d);
+
+function cam(c,u){if(!c)return;const z=lerp(c.z0||1,c.z1||1,smooth(u));ctx.translate(640,360);ctx.scale(z,z);ctx.translate(-640,-360);}
+function render(t){
+  t=clamp(t,0,TOTAL-1e-6);
+  const s=segs.find(x=>t>=x.start&&t<x.end)||segs[segs.length-1],lt=t-s.start,u=lt/s.d;
+  ctx.clearRect(0,0,W,H);ctx.save();cam(s.cam,u);s.draw(u,lt,t);ctx.restore();vignette(.35);
+  (s.lines||[]).forEach(([a,b,str,who])=>{if(u>=a&&u<b)subtitle(str,who);});
+  if(annOn){
+    const a1=`${s.id}　${s.what}`,a2='画面：'+s.scr;ctx.font=`600 17px ${FONT}`;
+    let w1=Math.min(1180,ctx.measureText(a1).width);ctx.font=`400 14px ${FONT}`;const w=Math.max(w1,ctx.measureText(a2).width)+40;
+    ctx.fillStyle="rgba(0,0,0,.62)";ctx.fillRect(16,16,Math.min(1110,w),64);
+    ctx.save();ctx.beginPath();ctx.rect(16,16,1110,64);ctx.clip();text(a1,30,37,17,'#fff','left',600);text(a2,30,62,14,'#f6d27a','left',400);ctx.restore();
+    if(s.flag){ctx.font=`600 15px ${FONT}`;const fw=ctx.measureText('要確認').width+24;rrect(W-fw-16,16,fw,30,6,'#ff8a65');text('要確認',W-16-fw/2,31,15,'#111','center',700);}
+  }
+  return s;
+}
+const fmt=x=>{x=Math.max(0,x);const m=Math.floor(x/60),s=Math.floor(x%60);return m+':'+String(s).padStart(2,'0');};
+
+// ---------- 進行バー（カットの区切り） ----------
+const bar=$('bar');
+segs.forEach((s,i)=>{const d=document.createElement('div');d.className='seg';d.style.left=(s.start/TOTAL*100)+'%';d.style.width=(s.d/TOTAL*100)+'%';d.style.background=s.part===1?(i%2?'#2c3a4d':'#34455c'):(i%2?'#4d3a2c':'#5c4634');if(s.flag)d.style.boxShadow='inset 0 -4px 0 #ff8a65';d.title=s.id+' '+s.what;bar.appendChild(d);});
+[['1本目',0],['2本目',T2]].filter(([,x])=>x<TOTAL).forEach(([l,x])=>{const d=document.createElement('div');d.className='lbl';d.style.left=`calc(${x/TOTAL*100}% + 4px)`;d.textContent=l;bar.appendChild(d);});
+const head=document.createElement('div');head.className='head';bar.appendChild(head);
+let drag=false;const seek=e=>{const r=bar.getBoundingClientRect();t=clamp((e.clientX-r.left)/r.width,0,1)*TOTAL;};
+bar.addEventListener('pointerdown',e=>{drag=true;seek(e);});addEventListener('pointermove',e=>{if(drag)seek(e);});addEventListener('pointerup',()=>drag=false);
+
+// ---------- カット表 ----------
+const tb=$('cuts'),rows=[],esc=s=>String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]);
+let lastPart=0;
+segs.forEach(s=>{
+  if(s.part!==lastPart){lastPart=s.part;const r=document.createElement('tr');r.className='sec';r.innerHTML=`<td colspan="7">${s.part===1?'1本目：プレゼントの発案と準備（あさこの物語）3:06':'2本目：プレゼントが届くまで 3:29（1本目から言葉を挟まず続けて流す）'}</td>`;tb.appendChild(r);}
+  const r=document.createElement('tr');r.className='cut';const st=s.part===1?s.start:s.start-T2;
+  const say=(s.lines||[]).filter(l=>!/^（.*）$/.test(l[2])||l[3]).map(l=>esc(l[2])+(l[3]?`（${esc(l[3])}）`:'')).join('<br>');
+  r.innerHTML=`<td class="n">${fmt(st)}</td><td class="n">${s.id}</td><td class="n">${s.d}</td><td>${esc(s.what)}</td><td>${esc(s.scr)}</td><td>${esc(s.snd)}${s.snd&&say?'<br>':''}${say}</td><td class="flag">${s.flag?'要確認：'+esc(s.flag):''}${s.flag&&s.memo?'<br>':''}<span style="color:var(--muted)">${esc(s.memo)}</span></td>`;
+  r.onclick=()=>{t=s.start;scrollTo({top:0,behavior:'smooth'});};tb.appendChild(r);rows.push([s,r]);
+});
+
+// ---------- プレイヤー ----------
+let t=0,playing=false,last=performance.now(),speed=1,annOn=true;
+const playB=$('play'),tcEl=$('tc');
+const updBtn=()=>playB.textContent=playing?'❚❚ 停止':'▶ 再生';
+playB.onclick=()=>{if(t>=TOTAL-0.01)t=0;playing=!playing;updBtn();};
+$('restart').onclick=()=>{t=0;playing=true;updBtn();};
+$('to2').onclick=()=>{t=T2;};
+$('spd').onclick=e=>{speed=speed===1?2:speed===2?4:1;e.target.textContent=speed+'x';};
+$('ann').onclick=e=>{annOn=!annOn;e.target.classList.toggle('on',annOn);};
+$('shuffle').onclick=()=>{seed=Math.floor(Math.random()*1e6)+1;buildMontage(P1[0].d);t=0;};
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'){e.preventDefault();playB.click();}});
+// 音：1本目・2本目それぞれ、らら仮動画の曲
+const A=[new Audio(),new Audio()],hasA=[false,false];
+[1,2].forEach(n=>{$('bgm'+n).onchange=e=>{const f=e.target.files[0];if(!f)return;A[n-1].src=URL.createObjectURL(f);hasA[n-1]=true;$('bgm'+n+'Name').textContent=f.name;};});
+function syncMusic(){
+  const p=t<T2?0:1,pos=p?t-T2:t;
+  A.forEach((a,i)=>{
+    if(!hasA[i])return;const want=playing&&i===p&&(!a.duration||pos<a.duration);
+    if(want){a.playbackRate=speed;if(Math.abs(a.currentTime-pos)>0.3)a.currentTime=pos;if(a.paused)a.play().catch(()=>{});}
+    else if(!a.paused)a.pause();
+    a.volume=+$('vol').value;
+  });
+}
+function frame(now){
+  if(playing){t+=(now-last)/1000*speed;if(t>=TOTAL){t=TOTAL;playing=false;updBtn();}}
+  usedVids=new Set();last=now;const s=render(t);syncMusic();
+  VIDS.forEach(v=>{if(!usedVids.has(v)&&!v.paused)v.pause();});   // 映っていない動画は止める
+  head.style.left=(t/TOTAL*100)+'%';
+  tcEl.textContent=(t<T2?'1本目 '+fmt(t):'2本目 '+fmt(t-T2))+'　（通し '+fmt(t)+' / '+fmt(TOTAL)+'）';
+  rows.forEach(([x,r])=>r.classList.toggle('cur',x===s));
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
