@@ -41,7 +41,7 @@ tr.cur td{background:#2a2412}
   <h1>Vコンテ らら案ベース v1（今は1本目 3:06 だけ）</h1>
   <p class="note">ららの仮動画の構成を骨組みにして、秒数は <b>動画タイムシート（10/24）</b> のとおり（1本目 17カット）。BGM はらら仮動画の曲で確定。2本目は後で出す。<br>
   10/26 の変更：<b>1-01 冒頭</b>は、ぱっぴーとの思い出動画をランダムに並べる。0:12 までは同じ長さで流し、そこから1本ずつ短くして（前の絵がブレながら溶けて次へ）、最後はパパパッと写真のように切り替える。0:14.3〜0:15 は時計（約20度回りながら少し近づき、斜めのまま止まる）を入れてから LINE へ（参考：カロリーメイト「今」0:11〜0:15）。<br>
-  10/27：各場面の要点を画面下に大きく出す（らら仮動画と同じ見せ方）。撮り方・素材名などの細かい説明は「制作メモ」ボタンで出る。<br>人＝シルエット（オレンジ＝ぱっぴー、青＝あさこ、緑＝らら、ピンク＝ちゃちゃ）、声＝字幕。セリフ・文言はすべて仮。オレンジ字の「要確認」は確認会で決めたいところ。スペースキーで再生／停止。</p>
+  10/28：まだ撮っていない場面（④⑤⑥⑦⑫）は、仮の絵が変なイメージを与えないよう黒地に文字だけにした。⑯は 2:39 から真っ暗。キャンバスは最後まで画面に出さない。<br>10/27：各場面の要点を画面下に大きく出す（らら仮動画と同じ見せ方）。撮り方・素材名などの細かい説明は「制作メモ」ボタンで出る。<br>人＝シルエット（オレンジ＝ぱっぴー、青＝あさこ、緑＝らら、ピンク＝ちゃちゃ）、声＝字幕。セリフ・文言はすべて仮。オレンジ字の「要確認」は確認会で決めたいところ。スペースキーで再生／停止。</p>
   <canvas id="cv"></canvas>
   <div id="bar"></div>
   <div class="ctrl">
@@ -61,7 +61,12 @@ tr.cur td{background:#2a2412}
     <span id="bgm2Wrap"><label class="btn">♪ 2本目の音<input type="file" accept="audio/*,video/mp4" id="bgm2" hidden></label>
     <span id="bgm2Name">未選択（らら_仮動画_2本目.mp4）</span></span>
     <label>音量 <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
+    <label class="btn">📁 素材フォルダを選ぶ<input type="file" id="clipDir" webkitdirectory multiple hidden></label>
     <span id="clipStat">思い出動画：読み込み中…</span>
+  </div>
+  <div class="ctrl music">
+    <button id="rec">⏺ 動画に書き出す</button>
+    <span id="recStat">曲と素材フォルダを読み込んでから押す。最初から再生しながら録るので、1本目なら 3分6秒かかる。録っている間はこのタブを前に出したままにする</span>
   </div>
   <p class="note">ららの仮動画を読み込むと、その曲で再生する。読み込んだ音はこのPCの中で再生するだけで、どこにも送られない。<br>
 </p>
@@ -69,7 +74,7 @@ tr.cur td{background:#2a2412}
   <div class="tbl"><table><thead><tr><th>時間</th><th>No</th><th>秒</th><th>中身</th><th>画面・撮り方</th><th>音・セリフ</th><th>要確認・メモ</th></tr></thead><tbody id="cuts"></tbody></table></div>
 </div>
 <script>
-const cv=document.getElementById('cv');let ctx=cv.getContext('2d');
+let cv=document.getElementById('cv'),ctx=cv.getContext('2d');
 const W=1280,H=720;cv.width=W;cv.height=H;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const smooth=u=>u*u*(3-2*u);
@@ -179,6 +184,7 @@ function feedScene(f,t){
   if(f>STOP)screenGlow(600,380,380,`rgba(255,220,120,${.3*clamp((f-STOP)/.15,0,1)})`);
   ctx.restore();
 }
+// 10/28 から 1-04 は絵なし（黒地に文字）にしたので、researchCut・thinkCut・feedScene は今は使っていない。撮影の参考に残す
 // 付箋の合間に入れる「調べている様子」。i＝0 スマホで検索／1 パソコンでタブだらけ／2 ノートに書いては消す。f＝0〜1
 const RESEARCH=['スマホで検索','パソコンでタブを開きまくる','ノートに書いては消す'];
 function researchCut(i,f,t){
@@ -246,7 +252,7 @@ const PAL=['#f2c6a0','#9cc3e6','#a8d5a2','#f4b6c2','#f5d58a','#c9b8e8','#9fd8d0'
 // 編集画面。prog＝プレビューの仕上がり
 function editor(prog,ph){
   rect(0,0,W,H,'#1f2126');rect(0,0,W,40,'#2b2e35');text('ぱっぴーへ_2本目（編集中）',20,20,16,'#ddd','left');
-  rect(60,60,760,428,'#000');board(440,274,380,prog);
+  rect(60,60,760,428,'#000');ctx.save();ctx.beginPath();ctx.rect(60,60,760,428);ctx.clip();ctx.translate(60,60);ctx.scale(760/W,428/H);MEM[MEMK[Math.floor(ph*7.99)]](ph,ph*10);ctx.restore();   // プレビューは動画（キャンバスは映さない）
   rect(840,60,380,428,'#26292f');text('素材',860,80,14,'#aaa','left');for(let i=0;i<12;i++)rect(860+(i%3)*118,100+Math.floor(i/3)*90,108,70,['#5d7a96','#8a6a52','#5f7f5a','#7a6b98'][i%4]);
   rect(60,510,1160,190,'#2b2e35');['V1','V2','A1'].forEach((s,r)=>{text(s,72,545+r*50,13,'#888','left');rect(100,530+r*50,1100,34,'#33363e');});
   const n=Math.floor(prog*10);for(let i=0;i<n;i++){rect(104+i*108,532,102,30,['#5d8fc4','#d9895b','#5e9e57'][i%3]);if(i%2)rect(104+i*108,582,100,30,'#7a6bb0');}
@@ -298,7 +304,16 @@ const CLIP_DIR=new URLSearchParams(location.search).get('clips')||'file:///C:/Us
 const CLIP_FILES=['0178b46e-a395-4d6b-9f60-c8579c3312ea','7279bca4-cf8c-46d6-9ef0-f0200ca09a9a','814436555.207824','814436666.971966','814436669.299034','814436687.747174','814436714.612718','814436722.422158','814436730.037580','814436743.914093','IMG_0848','IMG_0863','IMG_0864','IMG_0865','IMG_0867','IMG_0873','IMG_0875','IMG_0876','IMG_0888','IMG_0889','IMG_0892','af690d90-72d6-4da9-b044-864961ed1e52','b3a2d102-0736-46a9-8f4b-d9156a109314','c5809e1f-9f1d-4388-8406-5bf73a397d7f'];
 const VIDS=CLIP_FILES.map(n=>{const v=document.createElement('video');v.muted=true;v.preload='auto';v.playsInline=true;v.ok=false;
   v.addEventListener('loadeddata',()=>{v.ok=true;clipStat();});v.addEventListener('error',clipStat);v.src=CLIP_DIR+n+'.mp4';return v;});
-function clipStat(){const n=VIDS.filter(v=>v.ok).length,el=document.getElementById('clipStat');if(el)el.textContent=n?`思い出動画：${n}本読み込み済み（素材フォルダの短縮版）`:'思い出動画：素材フォルダが見つからないので仮の絵で表示中';}
+function clipStat(){const n=VIDS.filter(v=>v.ok).length,el=document.getElementById('clipStat');if(el)el.textContent=n?`思い出動画：${n}本読み込み済み（${VIDS.some(v=>v.ok&&v.src.startsWith('blob:'))?'選んだフォルダから':'素材フォルダの短縮版'}）`:'思い出動画：素材フォルダが見つからないので仮の絵で表示中';}
+// 「素材フォルダを選ぶ」で読み込んだ動画は、書き出し（録画）にも入れられる。
+// file:// から直接読んだ動画はキャンバスを汚染（tainted）して録画できないため、書き出し中は仮の絵で描く
+function useClipFolder(files){
+  const pick={};
+  [...files].filter(f=>/\.mp4$/i.test(f.name)).forEach(f=>{const n=f.name.replace(/\.mp4$/i,''),short=/_vコンテ用/.test(f.webkitRelativePath||'');if(!pick[n]||short)pick[n]=f;});   // 同じ名前があれば短縮版（_vコンテ用）を優先
+  let k=0;CLIP_FILES.forEach((n,i)=>{const f=pick[n];if(!f)return;const v=VIDS[i];v.ok=false;v.src=URL.createObjectURL(f);k++;});
+  if(!k)alert('素材の動画（'+CLIP_FILES[0]+'.mp4 など）が見つからなかった。「動画素材」か「_vコンテ用」のフォルダを選んでください');
+}
+const canRec=v=>!recording||v.src.startsWith('blob:');
 let usedVids=new Set();
 // 再生中は動画をそのまま流し、止めているときやずれたときはその位置へ合わせる
 function syncVid(v,want){
@@ -307,7 +322,7 @@ function syncVid(v,want){
   else{if(!v.paused)v.pause();if(Math.abs(v.currentTime-want)>.04)v.currentTime=want;}
 }
 function memClip(c,cu,t,blur,dx=0){
-  const v=VIDS[c.v],real=v&&v.ok;
+  const v=VIDS[c.v],real=v&&v.ok&&canRec(v);
   if(real)syncVid(v,clamp(cu*c.dur,0,CLIP_LEN-.05));
   blurred(blur,()=>{ctx.save();const z=1+cu*.05;ctx.translate(640+dx,360);ctx.scale(z,z);ctx.translate(-640,-360);if(real)ctx.drawImage(v,0,0,W,H);else MEM[c.m](cu,t+c.ph*10);ctx.restore();});
 }
@@ -364,6 +379,55 @@ function paintScene(n,ang,u,t,hide){
 // 「出来ました〜」：完成した絵を持って見せる
 function doneShow(n,u,t){bgGrad('#efe3d0','#b89c78');bust(640,180,.7,{who:'guest'});board(640,450,380,n/PEOPLE);arm(380,720,460,560,40);arm(900,720,820,560,40);}
 
+// ---------- 10/28 追加 ----------
+// 絵なしの場面：黒地に文字だけ（まだ撮っていない場面で、仮の絵が変なイメージを与えないように）
+function darkCard(lines,a=1){
+  rect(0,0,W,H,'#000');ctx.save();ctx.globalAlpha=a;
+  lines.forEach((s,i)=>text(s,640,300+i*56-(lines.length-1)*20,i?24:40,i?'#8a8a8a':'#e6e6e6','center',i?400:600));ctx.restore();
+}
+// 素材の動画を (x,y,w,h) の枠に流す。i＝CLIP_FILES の番号
+function clipIn(x,y,w,h,i,cu,t){ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.translate(x,y);ctx.scale(w/W,h/H);memClip({v:i,m:MEMK[i%MEMK.length],ph:i*.13,dur:CLIP_LEN},cu,t,0);ctx.restore();}
+// その場面が何か（シルエットだけだと分かりにくいので小さく添える）
+function shotLabel(s){shadowText(s,40,52,22,'left',600);}
+// 雨の線
+function rain(t,a=.35){ctx.strokeStyle=`rgba(200,212,235,${a})`;ctx.lineWidth=2;ctx.beginPath();for(let i=0;i<160;i++){const x=(i*97.7+t*60)%(W+80)-40,y=(i*61.3+t*900)%(H+60)-30;ctx.moveTo(x,y);ctx.lineTo(x-8,y+34);}ctx.stroke();}
+// 雨のカフェの外観。窓から3人が見える。k＝寄り 0〜1
+function cafeRain(k,t){
+  ctx.save();const z=lerp(1,1.12,k);ctx.translate(640,400);ctx.scale(z,z);ctx.translate(-640,-400);
+  bgGrad('#151b26','#262e3c');rect(140,120,1000,520,'#3f3731');rect(110,100,1060,40,'#28221e');
+  rrect(520,138,240,52,8,'#d8ccb4');text('CAFE',640,165,28,'#4a3322','center',700);
+  rect(220,250,840,290,'#f0be78');screenGlow(640,400,520,'rgba(255,190,110,.35)');
+  rect(470,470,340,14,'#5a3a22');
+  fig(440,540,1.3,{pose:'sit',view:'right',who:'rara',t});fig(640,540,1.3,{pose:'sit',view:'front',who:'chacha',t});fig(840,540,1.3,{pose:'sit',view:'left',who:'asako',t});
+  [430,640,850].forEach(x=>rect(x-4,250,8,290,'#3f3731'));rect(220,250,840,6,'#3f3731');rect(220,534,840,6,'#3f3731');
+  rect(220,250,840,290,'rgba(180,200,230,.08)');
+  rect(0,640,W,80,'#12161e');rect(220,650,840,60,'rgba(240,190,120,.12)');
+  ctx.restore();rain(t);
+}
+// 思い出の写真（仮）が積み重なる。n＝枚数、k＝最後の1枚の落ち方 0〜1
+function photoStack(n,k){
+  rect(0,0,W,H,'#15120f');const WHO=['asako','chacha','rara'];
+  for(let i=0;i<n;i++){const last=i===n-1,s=last?lerp(1.3,1,smooth(k)):1;
+    ctx.save();ctx.globalAlpha=last?k:1;ctx.translate(220+(i*317)%840,190+(i*191)%340);ctx.rotate(((i*53)%11-5)*.05);ctx.scale(s,s);
+    ctx.shadowColor='rgba(0,0,0,.5)';ctx.shadowBlur=18;rect(-130,-150,260,300,'#fbfaf6');ctx.shadowBlur=0;
+    ctx.beginPath();ctx.rect(-115,-135,230,220);ctx.clip();rect(-115,-135,230,220,PAL[(i*3)%PAL.length]);
+    fig(-40,80,.9,{who:'pappy'});fig(40,80,.9,{who:WHO[i%3]});ctx.restore();}
+}
+// 1-14 の準備モンタージュ（短く切り替える）。キャンバスは映さない
+const PREP=[
+  ['あさこ：真剣に編集',(f,t)=>editor(lerp(.3,.6,f),f)],
+  ['らら：真剣な顔',(f,t)=>{bgGrad('#34453b','#161e19');bust(640,270,1,{who:'rara',down:.1});}],
+  ['あさこ：画面を見つめる',(f,t)=>{bgGrad('#1c1f28','#0b0c10');screenGlow(980,300,520,'rgba(160,200,255,.32)');bust(560,280,1,{view:'right',who:'asako'});}],
+  ['ちゃちゃ：笑っている',(f,t)=>{bgGrad('#f3dcc6','#c09a7b');bust(640,280,1,{who:'chacha',bob:18,t});hand('あはは',930,170,44,'#fff');}],
+  ['手元：キーボードを打つ',(f,t)=>{rect(0,0,W,H,'#2a2d33');rect(230,290,820,320,'#1b1d22');for(let r=0;r<4;r++)for(let c=0;c<13;c++)rrect(262+c*60,318+r*68,50,56,6,'#33363e');arm(260,760,470+Math.sin(t*14)*16,430,42,SKIN);arm(1020,760,800+Math.cos(t*12)*16,440,42,SKIN);}],
+  ['ちゃちゃ：真剣な顔',(f,t)=>{bgGrad('#3a3440','#1a171e');bust(640,280,1,{view:'left',who:'chacha',down:.15});}],
+  ['あさこ：メモを書く',(f,t)=>{rect(0,0,W,H,'#3a2f25');rect(330,90,620,560,'#fbfaf3');for(let j=0;j<12;j++)rect(360,150+j*40,560,1,'#c9d6e6');const n=1+Math.floor(f*8);for(let j=0;j<n;j++)rect(390,138+j*40,180+(j*137)%300,5,'#555');arm(1100,820,580+Math.sin(t*9)*30,150+n*40,40,SKIN);}],
+  ['らら・ちゃちゃ：笑い合う',(f,t)=>{bgGrad('#f0c27a','#c07a3a');bust(420,300,.8,{view:'right',who:'rara',bob:16,t});bust(860,300,.8,{view:'left',who:'chacha',bob:16,t:t+.3});}],
+  ['あさこ：深夜まで',(f,t)=>{deskRoom(true);screenGlow(640,380,360);fig(640,680,1.8,{pose:'sit',view:'back',who:'asako',t});text('AM 2:14',1120,90,30,'#9fb3d6','right',600);}],
+  ['らら：笑っている',(f,t)=>{bgGrad('#e9e1f2','#b9aacd');bust(640,280,1,{who:'rara',bob:18,t});hand('あはは',930,170,44,'#fff');}],
+];
+const PREP_ORDER=[0,1,2,3,4,5,6,7,0,8,9,2];
+
 // ---------- カット ----------
 // d＝秒（タイムシートどおり）、what＝中身、scr＝画面・撮り方、snd＝音・セリフ、flag＝要確認、memo＝メモ、lines＝[[開始u,終了u,字幕,話す人]]
 const P1=[
@@ -390,41 +454,45 @@ const P1=[
      bigWord('あさこショック',clamp((u-.55)/.1,0,1));note(face?'顔のアップ（落ち込み）':'引き（部屋でうなだれる）');}}},
 {id:'1-03',d:3,cap:'ららに「送別会やろう」',what:'ららに「送別会やろう」と LINE →「やろう！」→「草案考えてみるー」',scr:'スマホの画面録画',snd:'',memo:'10/27 伊藤：ららの「やろう！」に、あさこが「草案考えてみるー」と返す',
  draw:(u)=>{rect(0,0,W,H,'#1a1b20');phone(640,380,.95,[[1,'ぱっぴーの送別会やろう'],[0,'やろう！'],[1,'草案考えてみるー']],u*3.6,{title:'らら'});}},
-{id:'1-04',d:12,cap:[[0,'送別会で何をする？ 考える'],[.7,'塗り絵キャンバスを見つける']],what:'あさこが内容を考える：「送別会　内容　思い出」で検索 → 調べている様子と、ちょっと考えている様子を交互に（序盤なので軽く）→ スマホを流し見していて、塗り絵キャンバスの投稿で指が止まる（見つける）',
- scr:'パソコンの画面録画（検索）→ スマホで検索 → ほおづえ（横から）→ タブだらけのパソコン → ノートに書いては消す → 寝転んで天井を見る → スマホを手で持って SNS を流す（手元）',snd:'歌い出しから発案・準備へ。歌詞「見つける」で指が止まる',
- flag:'「見つける」の位置：見つける場面を短くしたので、指が止まるのが 0:36.6 ごろ（カットの 9.6秒目）になった。歌詞とずれていたら考えている場面の長さで調整する',
- memo:'10/26 伊藤：検索語を「送別会　内容　思い出」に。「見つける」は SNS を流していて指が止まる形に決定。10/27 伊藤：調べている様子のカットを複数入れる。見つける場面は少し短く（約5.8秒 → 3.6秒）。壁を付箋が覆いつくす演出はやめる（まだ序盤なので、ちょっと考えている形に）。付箋はやるならクライマックス前の落ち込むところ',
- draw:(u,lt,t)=>{
-   const SC=[[.12,.24,'r',0],[.24,.34,'t',0],[.34,.46,'r',1],[.46,.58,'r',2],[.58,.70,'t',1]];   // [開始,終了,r＝調べる／t＝考える,種類]
-   const sc=SC.find(([a,b])=>u>=a&&u<b);
-   if(u<.12){deskRoom(true);const k=u/.12,Q='送別会　内容　思い出';laptop(640,540,1,(x,y,w,h)=>{rect(x,y,w,h,'#fff');rrect(x+60,y+40,w-120,46,23,'#f1f3f4');text(Q.slice(0,Math.ceil(clamp(k/.6,0,1)*Q.length)),x+90,y+63,20,'#222','left');if(k>.7)for(let i=0;i<5;i++)rect(x+60,y+120+i*42,w-200-(i*40)%120,14,'#c9d3f0');});}
-   else if(sc)(sc[2]==='r'?researchCut:thinkCut)(sc[3],(u-sc[0])/(sc[1]-sc[0]),t);
-   else feedScene((u-.7)/.3,t);
-   if(u>.8){ctx.globalAlpha=clamp((u-.81)/.05,0,1);shadowText('♪「見つける」',1100,150,26,'right');ctx.globalAlpha=1;}}},
-{id:'1-05',d:9,cap:'らら・ちゃちゃに相談',what:'コメダで らら・ちゃちゃに相談（もしくは、みんなに声をかける）',scr:'実写（カフェ。3人を横から）',snd:'',
- draw:(u,lt,t)=>{bgGrad('#c9a77c','#7a5434');rect(0,540,W,180,'#4a3322');rect(460,500,360,24,'#3a2618');fig(330,650,1.9,{pose:'sit',view:'right',who:'rara',t});fig(640,650,1.9,{pose:'sit',view:'front',who:'asako',t});fig(950,650,1.9,{pose:'sit',view:'left',who:'chacha',t});shadowText('コメダ',60,120,22,'left');if(u>.3)subtitle('「キャンバスをみんなに塗ってもらいたくて」（仮）','あさこ');}},
-{id:'1-06',d:9,cap:'みんなに声をかける',what:'みんなに声をかける（LINE の画面か、直接か）',scr:'スマホの画面録画（ぱっぴー抜きのグループ）',snd:'',
- draw:(u)=>{rect(0,0,W,H,'#1a1b20');phone(640,380,.95,[[1,'ぱっぴーには内緒で'],[1,'協力してほしい！'],[0,'いいよー'],[0,'なにやるの？'],[0,'のった']],u*5.5,{title:'（ぱっぴー抜きのグループ）'});}},
-{id:'1-07',d:12,cap:'準備の日々',what:'準備の様子。日にちが過ぎていく（カレンダーなど）',scr:'実写（タイムラプス）＋カレンダー',snd:'0:57 から曲調が変わる（ギターがアルペジオ）→ 時間が進む感覚',
- draw:(u,lt,t)=>{deskRoom(true);screenGlow(380,380,300);fig(380,680,1.8,{pose:'sit',view:'back',who:'asako',t:t*3});const day=Math.floor(smooth(u)*90),mo=Math.floor(day/30);rect(760,120,360,400,'#fbfaf3');rect(760,120,360,70,'#c33');text(['○月','△月','□月','◇月'][mo],940,155,30,'#fff','center',700);text(String(day%30+1),940,350,160,'#222','center',700);}},
-{id:'1-08',d:9,cap:'ぱっぴーとの思い出がよみがえる',what:'ぱっぴーとの思い出「動画あるといいねぇ〜」。あさこかちゃちゃが昔を思い出している感じ',scr:'思い出の動画か写真（少しセピア）',snd:'',memo:'らら：詰められる前に、思い出を入れる',lines:[[.25,.9,'「動画あるといいねぇ〜」','ぱっぴー（思い出の中）']],
- draw:(u,lt,t)=>{rect(0,0,W,H,'#0d0d10');ctx.save();ctx.translate(240,90);ctx.scale(.62,.62);ctx.filter='sepia(.6)';MEM.takibi(u,t);ctx.restore();ctx.strokeStyle='#eee';ctx.lineWidth=8;ctx.strokeRect(240,90,794,446);}},
-{id:'1-09',d:3,cap:'動画の進捗を報告',what:'動画の進捗報告',scr:'パソコンの画面（編集中）',snd:'完全に無音になる前に入る（シリアス感）',lines:[[.1,1,'「動画、今こんな感じ」（仮）','あさこ']],
- draw:(u)=>{editor(.3,u*.3);}},
-{id:'1-10',d:18,cap:'ららに詰められる',what:'ららから詰められる「動画がいいな〜」',scr:'実写（らら・あさこを横から → ららの肩越し）',snd:'1:22〜1:25 無音',lines:[[.08,.45,'「動画がいいな〜」','らら'],[.55,.95,'（詰められる。セリフは仮）','らら']],
- draw:(u,lt,t)=>{if(u<.5){bgGrad('#d8c3a5','#8b7356');rect(0,520,W,200,'#5a4632');fig(380,640,2,{pose:'sit',view:'right',who:'rara',t});fig(900,640,2,{pose:'sit',view:'left',who:'asako',t});rect(520,500,240,24,'#3a2d20');}else{bgGrad('#4a4f5c','#23262e');bust(820,300,.8,{view:'left',who:'asako'});ctx.save();ctx.filter='blur(12px)';bust(230,380,1.2,{view:'back',who:'rara'});ctx.restore();}}},
-{id:'1-11',d:6,cap:'言葉が出ない',what:'無言の間。あさこは喋らず表情だけ',scr:'実写（あさこの顔に寄る）',snd:'1:37〜1:44 完全に無音（雨が止んだ後）',memo:'10/27 伊藤：壁を付箋が覆いつくす演出（伊藤案 v3）をやるなら、このあたりの落ち込むところ（1-04 からは外した）',
+{id:'1-04',d:12,cap:[[0,'送別会で何をする？ 考える'],[.7,'プレゼントを見つける']],what:'あさこが内容を考える：検索したり、ちょっと考えたり（序盤なので軽く）→ スマホを流し見していて、塗り絵キャンバスの投稿で指が止まる（見つける）',
+ scr:'今は絵なし（黒地に文字）。撮るもの：パソコン・スマホで検索／ほおづえ／タブだらけ／ノートに書いては消す／寝転ぶ → スマホで SNS を流す手元',snd:'歌い出しから発案・準備へ。歌詞「見つける」で指が止まる',
+ flag:'「見つける」の位置：指が止まるのは 0:36.6 ごろ（カットの 9.6秒目）。歌詞とずれていたら調整する',
+ memo:'10/27 伊藤：付箋が覆いつくす演出はやめる（付箋はやるならクライマックス前の落ち込むところ）。見つける場面は少し短く。10/28 伊藤：仮の絵だと見た人に変なイメージが湧くので、いったん絵なし（黒地に文字）。キャンバスは最後まで分からないようにする（画面にも出さない）',
+ draw:(u,lt,t)=>darkCard(u<.7?['検索したり、考えたり','（調べている様子・考えている様子を短く重ねる）']:['SNS を流していて、指が止まる','（何を見つけたかは見せない）'])},
+{id:'1-05',d:9,cap:'らら・ちゃちゃに相談',what:'会議室で らら・ちゃちゃに相談',scr:'今は絵なし（黒地に文字）。撮るもの：会議室で3人を横から',snd:'',memo:'10/28 伊藤：いったん絵なし。場所はコメダではなく、どこかの会議室',lines:[[.35,.95,'「みんなに協力してもらいたくて」（仮）','あさこ']],
+ draw:(u)=>darkCard(['会議室で、らら・ちゃちゃに相談'])},
+{id:'1-06',d:9,cap:'みんなに声をかける',what:'みんなに声をかける（LINE の画面か、直接か）',scr:'今は絵なし（黒地に文字）。撮るもの：ぱっぴー抜きのグループ LINE の画面録画',snd:'',memo:'10/28 伊藤：いったん絵なし',
+ draw:(u)=>darkCard(['ぱっぴー抜きのグループで、みんなに声をかける','（LINE の画面か、直接か）'])},
+{id:'1-07',d:12,cap:'準備の日々',what:'準備の様子。日にちが過ぎていく',scr:'今は絵なし（黒地に文字）。撮るもの：準備のタイムラプス・カレンダーなど',snd:'0:57 から曲調が変わる（ギターがアルペジオ）→ 時間が進む感覚',memo:'10/28 伊藤：いったん絵なし',
+ draw:(u)=>darkCard(['準備の日々','日にちが過ぎていく'])},
+{id:'1-08',d:9,cap:'ぱっぴーとの思い出がよみがえる',what:'パソコンでぱっぴーの動画を見ている → 画面に寄って実際の動画に切り替わり、ぱっぴーとの動画を何本か見る',scr:'暗い部屋でパソコンの画面（実写）→ 素材の動画を全画面で何本か',snd:'',memo:'らら：詰められる前に、思い出を入れる。10/28 伊藤：スマホかPCの画面を通して見ている形 → 実際の動画に切り替えて、複数見る。「動画あるといいねぇ〜」の字幕はなし',
+ draw:(u,lt,t)=>{const V=[2,6,10,14,18,22];
+   if(u<.45){const z=lerp(1,2.3,smooth(clamp((u-.3)/.15,0,1)));ctx.save();ctx.translate(640,360);ctx.scale(z,z);ctx.translate(-640,-380);
+     deskRoom(true);screenGlow(640,380,520,'rgba(160,200,255,.25)');laptop(640,560,1,(x,y,w,h)=>clipIn(x,y,w,h,V[0],u/.45,t));fig(1020,720,1.5,{pose:'sit',view:'left',who:'asako',t});ctx.restore();note('パソコンで動画を見ている → 画面に寄る');}
+   else{const k=(u-.45)/.55*(V.length-1),i=Math.floor(k);clipIn(0,0,W,H,V[1+Math.min(i,V.length-2)],k-i,t);note('実際のぱっぴーの動画（何本か）');}}},
+{id:'1-09',d:3,cap:'動画の進捗を報告',what:'カフェで、動画の進捗をスマホで らら・ちゃちゃに見てもらう',scr:'実写（カフェ。あさこのスマホを2人がのぞき込む）',snd:'完全に無音になる前に入る（シリアス感）',memo:'10/28 伊藤：スマホでカフェで見てもらう形に',lines:[[.1,1,'「動画、今こんな感じ」（仮）','あさこ']],
+ draw:(u,lt,t)=>{bgGrad('#c9a77c','#6e4a2e');rect(0,560,W,160,'#4a3322');bust(300,330,.75,{view:'right',who:'rara'});bust(980,330,.75,{view:'left',who:'chacha'});
+   ctx.save();ctx.translate(640,470);ctx.rotate(-.04);rrect(-250,-140,500,280,30,'#111');clipIn(-230,-125,460,250,4,u,t);rect(-230,112,460*u,5,'#e33');ctx.restore();
+   arm(450,760,410,520,46,SKIN);arm(830,760,870,520,46,SKIN);}},
+{id:'1-10',d:18,cap:'ららに詰められる',what:'雨のカフェの外観（窓から3人が見える）→ 中でららから詰められる',scr:'実写（雨の中、カフェを外から。窓越しに3人）→ 中で3人を横から → ららの肩越しにあさこ',snd:'雨の音。1:22〜1:25 無音',memo:'10/28 伊藤：カフェの外観、雨が降っている様子（窓から自分たちが見えたら最高）→ そのあと詰められる。「動画がいいな〜」の字幕はなし',lines:[[.68,.96,'（詰められる。セリフは仮）','らら']],
+ draw:(u,lt,t)=>{if(u<.3)cafeRain(u/.3,t);
+   else if(u<.62){bgGrad('#d8c3a5','#8b7356');rect(0,520,W,200,'#5a4632');rect(460,500,360,24,'#3a2d20');fig(330,640,2,{pose:'sit',view:'right',who:'rara',t});fig(640,640,2,{pose:'sit',view:'front',who:'chacha',t});fig(950,640,2,{pose:'sit',view:'left',who:'asako',t});rect(0,0,W,H,'rgba(40,50,70,.18)');}
+   else{bgGrad('#4a4f5c','#23262e');bust(820,300,.8,{view:'left',who:'asako'});ctx.save();ctx.filter='blur(12px)';bust(230,380,1.2,{view:'back',who:'rara'});ctx.restore();}}},
+{id:'1-11',d:6,cap:'言葉が出ない',what:'あさこが言葉に詰まる「なんのためって。。。。」',scr:'実写（あさこの顔に寄る）',snd:'1:37〜1:44 完全に無音（雨が止んだ後）',memo:'10/27 伊藤：壁を付箋が覆いつくす演出（伊藤案 v3）をやるなら、このあたりの落ち込むところ（1-04 からは外した）。10/28 伊藤：あさこのセリフ「なんのためって。。。。」のような言葉を文字で入れる',lines:[[.15,.92,'「なんのためって。。。。」（仮）','あさこ']],
  cam:{z0:1,z1:1.12},draw:(u,lt,t)=>{bgGrad('#3c4250','#1a1d24');bust(640,280,1,{who:'asako',down:.2});}},
-{id:'1-12',d:12,cap:'あさこの、本当にやりたいこと',what:'ここから喋る：あさこのやりたいことをしっとり話す',scr:'実写（あさこの顔〜胸）',snd:'音が鳴り始めたら話す',lines:[[.1,.95,'（あさこのやりたいこと。しっとり・仮）','あさこ']],
- draw:(u,lt,t)=>{bgGrad('#4a4f5c','#23262e');screenGlow(640,300,500,'rgba(255,220,170,.18)');bust(640,270,1,{who:'asako',bob:3,t});}},
+{id:'1-12',d:12,cap:'あさこの、本当にやりたいこと',what:'あさこのやりたいこと（ナレーションなし。らら案でも、ここにはセリフを入れない）',scr:'今は黒',snd:'ナレーションなし（曲だけ）',memo:'10/28 伊藤：真っ暗に。ナレなしと分かるように書く',
+ draw:(u)=>darkCard(['ナレーションなし','（曲だけ。あさこの言葉は入れない）'])},
 {id:'1-13',d:3,cap:'3人で動き出す',what:'3人で「やるぞっ！」',scr:'実写（3人。引き）',snd:'歌い出しからの盛り上がり',lines:[[.1,1,'「やるぞっ！」','3人']],
  draw:(u,lt,t)=>{bgGrad('#f0c27a','#c07a3a');[[400,'rara'],[640,'asako'],[880,'chacha']].forEach(([x,w])=>fig(x,660,2,{pose:u>.2?'cheers':'stand',who:w,t}));}},
-{id:'1-14',d:18,cap:'動画編集とキャンバスの発注',what:'動画編集＋その他の準備（キャンバスの発注、写真集めなど）',scr:'画面録画＋手元',snd:'',
- draw:(u,lt,t)=>{if(u<.4)editor(lerp(.2,.6,u/.4),u/.4);else if(u<.7){deskRoom(true);laptop(640,540,1,(x,y,w,h)=>{rect(x,y,w,h,'#fff');board(x+130,y+150,200,1);text('カスタム塗り絵キャンバス',x+260,y+70,20,'#222','left');const dn=u>.6;rrect(x+260,y+180,220,50,10,dn?'#3aa16c':'#f0b429');text(dn?'注文完了':'注文を確定する',x+370,y+205,20,'#fff');});shadowText('キャンバスを発注',60,120,22,'left');}else editor(lerp(.6,.95,(u-.7)/.3),(u-.7)/.3);}},
-{id:'1-15',d:27,cap:'ちゃちゃからのメッセージ',what:'ちゃちゃのガチメッセージ。あさこ・ちゃちゃの思い出写真',scr:'実写（ちゃちゃの顔〜胸）と、同期の思い出写真を交互に',snd:'',memo:'らら：メッセージは同期のちゃちゃとあさこだけ。ぱっぴーは同期を大事にしている',lines:[[.05,.33,'（ちゃちゃのガチメッセージ）','ちゃちゃ'],[.65,.97,'（ちゃちゃのガチメッセージ）','ちゃちゃ']],
- draw:(u,lt,t)=>{if(u<.35||u>=.62){bgGrad('#3a3440','#1a171e');bust(640,270,1,{who:'chacha',bob:3,t});}else{rect(0,0,W,H,'#1a1a1a');const k=Math.floor((u-.35)/.27*3);for(let i=0;i<=k&&i<3;i++){ctx.save();ctx.translate(300+i*340,360);ctx.rotate((i-1)*.06);rect(-150,-180,300,360,'#fff');ctx.save();ctx.beginPath();ctx.rect(-135,-165,270,280);ctx.clip();rect(-135,-165,270,280,['#f3c98b','#bfe0f0','#cfe0c8'][i]);fig(-50,105,1,{who:'pappy'});fig(50,105,1,{who:i%2?'chacha':'asako'});ctx.restore();hand('同期の思い出（仮）',0,150,16,'#333');ctx.restore();}}}},
-{id:'1-16',d:15,cap:'締めの言葉',what:'（らら案ではほぼ黒画面）→「長野生活は〜」で締める',scr:'黒地に文字',snd:'',flag:'ここに何を置くか未定',memo:'らら：「長野生活は〜」で締める。最初と最後を同じにする',
- draw:(u)=>{rect(0,0,W,H,'#000');hand('「長野生活は〜」（締めのセリフ・仮）',640,360,40,'#fff',fade(u,.15,.2));}},
+{id:'1-14',d:18,cap:'3人の本気の準備',what:'あさこの真剣な準備風景と、らら・ちゃちゃの真剣な表情・笑っている様子を短い間隔（約1.5秒）で切り替える。キャンバスは映さない',scr:'実写（顔の寄り・手元・編集画面など）',snd:'',memo:'10/28 伊藤：短い間隔で使いたい。キャンバスは最後まで分からないようにする（発注の画面も出さない）',
+ draw:(u,lt,t)=>{const k=u*PREP_ORDER.length,i=Math.min(Math.floor(k),PREP_ORDER.length-1),p=PREP[PREP_ORDER[i]];p[1](k-i,t);shotLabel(p[0]);}},
+{id:'1-15',d:21,cap:'ちゃちゃからのメッセージ',what:'最初の3秒ぐらいちゃちゃの顔 → これまでの思い出の写真がランダムに積み重なる＋これまで撮った動画が流れる（声はずっと流れる）',scr:'実写（ちゃちゃの顔）→ 思い出の写真・素材の動画',snd:'ちゃちゃのメッセージの声',memo:'らら：メッセージは同期のちゃちゃとあさこだけ。ぱっぴーは同期を大事にしている。10/28 伊藤：顔は最初の3秒ぐらい。2:39 からは次の黒い画面にするので、ここは 27秒 → 21秒',lines:[[.02,.98,'（ちゃちゃのメッセージ。声はずっと流れる・仮）','ちゃちゃ']],
+ draw:(u,lt,t)=>{if(lt<3){bgGrad('#3a3440','#1a171e');bust(640,270,1,{who:'chacha',bob:3,t});return;}
+   const VS=[[8,10.5,1],[14,16.5,5],[18.5,21,9]],v=VS.find(([a,b])=>lt>=a&&lt<b);
+   if(v){clipIn(0,0,W,H,v[2],(lt-v[0])/(v[1]-v[0]),t);black(1-clamp((lt-v[0])/.3,0,1));note('これまで撮った動画');return;}
+   const pt=lt-3-VS.reduce((s,[a,b])=>s+clamp(lt-a,0,b-a),0),n=Math.floor(pt/.45)+1;photoStack(n,clamp((pt%.45)/.2,0,1));note('思い出の写真がランダムに積み重なる');}},
+{id:'1-16',d:21,cap:'締めの言葉',what:'2:39 から真っ暗。背景のナレーションに合わせて文字を出す →「長野生活は〜」で締める',scr:'黒地に文字',snd:'背景のナレーション',flag:'ナレーションの中身と、文字を出すタイミング（ナレを録ってから合わせる）',memo:'らら：「長野生活は〜」で締める。最初と最後を同じにする。10/28 伊藤：2:39〜は真っ暗な画面（ここから⑯）。背景のナレに合わせる',
+ draw:(u)=>{rect(0,0,W,H,'#000');[[.04,.34,'（ナレーション・仮）'],[.37,.66,'（ナレーション・仮）'],[.69,.97,'「長野生活は〜」（締め・仮）']].forEach(([a,b,s])=>{if(u>=a&&u<b)hand(s,640,340,40,'#fff',fade((u-a)/(b-a),.15,.15));});}},
 {id:'1-17',d:6.2,cap:'あさこからのメッセージ',what:'あさこのガチメッセージ →「それでは、動画をご覧下さい！」',scr:'実写（暗い中であさこの顔）',snd:'2:56〜3:06 無音（BGM が終わる）。音がないところで話して2本目へつなぐ',lines:[[.05,.65,'（あさこのガチメッセージ）','あさこ'],[.7,1,'「それでは、動画をご覧下さい！」','あさこ']],
  draw:(u,lt,t)=>{rect(0,0,W,H,'#000');const k=smooth(clamp(u/.4,0,1));screenGlow(640,300,420,`rgba(90,110,150,${.35*k})`);ctx.globalAlpha=k;bust(640,290,1,{who:'asako'});ctx.globalAlpha=1;}},
 ];
@@ -526,6 +594,32 @@ $('to2').onclick=()=>{t=T2;};
 $('spd').onclick=e=>{speed=speed===1?2:speed===2?4:1;e.target.textContent=speed+'x';};
 $('ann').onclick=e=>{annOn=!annOn;e.target.classList.toggle('on',annOn);};
 $('cap').onclick=e=>{capOn=!capOn;e.target.classList.toggle('on',capOn);};
+$('clipDir').onchange=e=>useClipFolder(e.target.files);
+// ---------- 動画に書き出す：キャンバスと曲を MediaRecorder で録る（再生しながらなので実時間かかる） ----------
+let recording=false,rec=null,recChunks=[],actx=null,recDest=null;
+const recB=$('rec'),recStat=$('recStat');
+function startRec(){
+  if(!hasA[0]&&!confirm('曲（らら_仮動画_1本目.mp4）が読み込まれていないので、音なしで書き出します。よいですか？'))return;
+  if(VIDS.some(v=>v.ok&&!v.src.startsWith('blob:'))&&!confirm('ぱっぴーの動画を入れるには「素材フォルダを選ぶ」から読み込む必要があります（直接読んだ動画は録画できない）。このまま書き出すと、その部分は仮の絵になります。よいですか？'))return;
+  // 前に file:// の動画を描いたキャンバスは汚染されていて録画できないので、新しいキャンバスに差し替える
+  const n=cv.cloneNode();cv.replaceWith(n);cv=n;ctx=cv.getContext('2d');
+  if(!actx){actx=new AudioContext();recDest=actx.createMediaStreamDestination();
+    A.forEach(a=>{const s=actx.createMediaElementSource(a);s.connect(actx.destination);s.connect(recDest);});}
+  actx.resume();
+  const stream=new MediaStream([...cv.captureStream(30).getVideoTracks(),...recDest.stream.getAudioTracks()]);
+  const type=['video/mp4;codecs=avc1,mp4a','video/mp4','video/webm;codecs=vp9,opus','video/webm'].find(x=>MediaRecorder.isTypeSupported(x))||'';
+  rec=new MediaRecorder(stream,{mimeType:type,videoBitsPerSecond:8e6});recChunks=[];
+  rec.ondataavailable=e=>{if(e.data.size)recChunks.push(e.data);};
+  rec.onstop=()=>{const ext=type.startsWith('video/mp4')?'mp4':'webm',blob=new Blob(recChunks,{type:type||'video/webm'}),a=document.createElement('a');
+    const d=new Date(),ymd=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    a.href=URL.createObjectURL(blob);a.download=`Vコンテ_らら案ベース_1本目_${ymd}.${ext}`;a.click();
+    recStat.textContent=`書き出し完了：${a.download}（${(blob.size/1048576).toFixed(1)}MB）。ダウンロードフォルダに保存される`;};
+  speed=1;$('spd').textContent='1x';t=0;recording=true;playing=true;updBtn();rec.start(1000);
+  recB.textContent='■ 書き出しを止める';
+}
+function stopRec(){if(!recording)return;recording=false;playing=false;updBtn();rec.stop();recB.textContent='⏺ 動画に書き出す';}
+recB.onclick=()=>recording?stopRec():startRec();
+document.addEventListener('visibilitychange',()=>{if(recording&&document.hidden)recStat.textContent='⚠ タブが隠れると絵が止まる。前に出したまま待つ';});
 $('shuffle').onclick=()=>{seed=Math.floor(Math.random()*1e6)+1;buildMontage(P1[0].d);t=0;};
 $('shock').onclick=e=>{SHOCK_FACE_FIRST=!SHOCK_FACE_FIRST;e.target.textContent='1-02 ショック：'+(SHOCK_FACE_FIRST?'顔 → 引き':'引き → 顔');t=segs.find(s=>s.id==='1-02').start+4.3;};
 document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'){e.preventDefault();playB.click();}});
@@ -543,6 +637,7 @@ function syncMusic(){
 }
 function frame(now){
   if(playing){t+=(now-last)/1000*speed;if(t>=TOTAL){t=TOTAL;playing=false;updBtn();}}
+  if(recording){if(!playing)stopRec();else if(!document.hidden)recStat.textContent=`書き出し中… ${fmt(t)} / ${fmt(TOTAL)}（終わると自動で保存される）`;}
   usedVids=new Set();last=now;const s=render(t);syncMusic();
   VIDS.forEach(v=>{if(!usedVids.has(v)&&!v.paused)v.pause();});   // 映っていない動画は止める
   head.style.left=(t/TOTAL*100)+'%';

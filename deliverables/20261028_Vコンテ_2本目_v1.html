@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vコンテ 2本目 v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Yomogi&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#111;--fg:#eee;--muted:#9a9a9a;--accent:#f0b429;--line:#333;--warn:#ff8a65}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 8px}
+p.note{color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6}
+p.note b{color:var(--fg)}
+canvas#cv{width:100%;aspect-ratio:16/9;display:block;background:#000;border-radius:6px}
+#bar{position:relative;height:30px;margin-top:8px;background:#1b1b1b;border-radius:4px;cursor:pointer;overflow:hidden}
+#bar .seg{position:absolute;top:0;bottom:0;border-left:1px solid #000}
+#bar .head{position:absolute;top:0;bottom:0;width:2px;background:#fff}
+.ctrl{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+button{background:#242424;color:var(--fg);border:1px solid #444;border-radius:6px;padding:6px 12px;font-size:14px;cursor:pointer}
+button.on{border-color:var(--accent);color:var(--accent)}
+#tc{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);min-width:120px}
+.music{font-size:13px;color:var(--muted)}
+label.btn{background:#242424;color:var(--fg);border:1px solid #444;border-radius:6px;padding:6px 12px;font-size:14px;cursor:pointer}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.55;min-width:860px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:500;background:var(--bg)}
+td.n{font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+td.flag{color:var(--warn)}
+tr.sec td{color:var(--accent);font-weight:600;padding-top:14px}
+tr.cut{cursor:pointer}
+tr.cut:hover td{background:#1a1a1a}
+tr.cur td{background:#2a2412}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Vコンテ 2本目 v1（3:29）</h1>
+  <p class="note"><b>構成（`20261028_2本目_構成_v1.md`）を動かしたもの。</b>らら案の2本目をベースに3点だけ変えた：<b>③ 3人で段ボールを抱えて「やっと届いたぞー！」→ 伝票・カッター → 箱の中から覗き込む顔</b>／<b>⑤〜⑦ 色塗りは人ごとに画角を変える＋手書きの文字</b>／<b>⑪ 「後ろを見てください」で手渡しして、ここで初めて絵柄が分かる</b>。<br>
+  <b>キャンバスの絵柄は ⑪ まで一度も映さない。</b>1・2人目の「出来ました〜」も、絵ではなく本人の顔で撮る。<br>
+  10/28 伊藤の修正：人のところ（⑤〜⑦）は黒地に文字だけ。<b>手書きの文字は 1〜3人目だけ、色塗り・話している画面の右下に重ねる</b>（4人目以降は ⑬ アウトロでまとめて出す）。③ は3人で撮る。「じゃあこれをみんなで塗ってこう！」は削除（覗き込み → 塗るところへ）。文字は斜めにせず水平に。<br>
+  <b>曲</b>：「僕らまた（吹奏楽 ver.）」（`sources/2026-10-28_BGM_僕らまた_吹奏楽ver.mp3`）。ららの仮動画と同じ音源で、位置もらら案と同じ（動画の秒＝曲の秒＋2.8秒）。<b>① は無音</b>にして 5.6秒に縮め、曲の鳴り始めを ②「長野から旅立つ」に合わせた。③ 以降の秒数は、らら仮動画（タイムシート 10/24）どおり。<br>
+  人＝シルエット（オレンジ＝ぱっぴー、青＝あさこ、緑＝らら、ピンク＝ちゃちゃ、グレー＝塗る人）、声＝字幕。セリフ・文言・手書きの言葉はすべて仮。スペースキーで再生／停止。</p>
+  <canvas id="cv"></canvas>
+  <div id="bar"></div>
+  <div class="ctrl">
+    <button id="play">▶ 再生</button>
+    <button id="restart">⟲ 最初から</button>
+    <button id="spd">1x</button>
+    <button id="cap" class="on">要点テロップ</button>
+    <button id="ann">制作メモ</button>
+    <button id="art">⑫ で完成した絵を見せる案</button>
+    <div id="tc"></div>
+  </div>
+  <div class="ctrl music">
+    <label class="btn">♪ 曲を選ぶ<input type="file" accept="audio/*,video/mp4" id="bgm" hidden></label>
+    <span id="bgmName">読み込み中…</span>
+    <label>音量 <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
+  </div>
+  <p class="note">曲は sources から自動で読む（読めないときは「♪ 曲を選ぶ」で mp3 を選ぶ）。読み込んだ音はこのPCの中で再生するだけで、どこにも送られない。</p>
+  <h2>カット表</h2>
+  <div class="tbl"><table><thead><tr><th>時間</th><th>No</th><th>秒</th><th>中身</th><th>画面・撮り方</th><th>音・セリフ</th><th>要確認・メモ</th></tr></thead><tbody id="cuts"></tbody></table></div>
+</div>
+<script>
+const cv=document.getElementById('cv');const ctx=cv.getContext('2d');
+const W=1280,H=720;cv.width=W;cv.height=H;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const smooth=u=>u*u*(3-2*u);
+const lerp=(a,b,k)=>a+(b-a)*k;
+const $=id=>document.getElementById(id);
+const FONT='system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif',HAND='"Yomogi","Segoe Print","Yu Gothic UI",cursive';
+const MINCHO='"Yu Mincho","YuMincho","Hiragino Mincho ProN","Noto Serif JP",serif';
+// Yomogi は文字の範囲ごとに分かれて読み込まれるので、手書きで出す文字をまとめて先に読む
+const HAND_CHARS='パッピーが長野から旅立つ共に過ごせた時間に感謝を込めてみんなからの贈り物後ろを見てくださいへ楽しいことが沢山でしたこの先の道も応援してるよまたいつでもチームに戻ってきてね一同より'+
+  'また会おう!!福島でも元気でねいってらっしゃい！ありがとうまた飲もうね体に気をつけていつでも帰っておいで大好きだよ応援してる！たまには連絡してね福島に遊びに行くね出会えてよかったずっと友だちがんばれ〜！またね！笑顔でねおつかれさま行ってらっしゃい、';
+document.fonts&&document.fonts.load('40px "Yomogi"',HAND_CHARS).catch(()=>{});
+
+// ---------- 描画パーツ（3人版 v1 から流用） ----------
+const INK='#26242e';
+const GLOW={pappy:'rgba(255,140,40,.95)',asako:'rgba(90,160,255,.95)',rara:'rgba(110,210,140,.95)',chacha:'rgba(240,120,170,.95)',guest:'rgba(200,200,200,.6)'};
+function bgGrad(a,b,y0=0,y1=H){const g=ctx.createLinearGradient(0,y0,0,y1);g.addColorStop(0,a);g.addColorStop(1,b);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h);}
+function rrect(x,y,w,h,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();}
+function poly(pts,c){ctx.fillStyle=c;ctx.beginPath();pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();}
+function circ(x,y,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
+function line(x1,y1,x2,y2,w,c){ctx.strokeStyle=c;ctx.lineWidth=w;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+function text(t,x,y,size,color,align='center',weight=500,font=FONT){ctx.font=`${weight} ${size}px ${font}`;ctx.fillStyle=color;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(t,x,y);}
+function shadowText(t,x,y,size,align='center',weight=500){ctx.save();ctx.shadowColor='rgba(0,0,0,.7)';ctx.shadowBlur=10;text(t,x,y,size,'#fff',align,weight);ctx.restore();}
+// 手書き風の文字（10/28 伊藤：斜めにしない。水平に）
+function hand(t,x,y,size,color='#fff',a=1){ctx.save();ctx.globalAlpha=a;text(t,x,y,size,color,'center',400,HAND);ctx.restore();}
+// セリフの字幕は要点テロップ（画面下）の上に出す
+function subtitle(t,who){ctx.font=`500 28px ${FONT}`;const w=ctx.measureText(t).width+44;ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(640-w/2,516,w,50);text(t,640,541,28,'#fff');if(who)shadowText(who,640,496,16);}
+// 要点テロップ（らら仮動画と同じ見せ方）
+function caption(str,a){if(a<=0)return;ctx.save();ctx.globalAlpha=a;
+  const g=ctx.createLinearGradient(0,580,0,H);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(.45,'rgba(0,0,0,.55)');g.addColorStop(1,'rgba(0,0,0,.7)');ctx.fillStyle=g;ctx.fillRect(0,580,W,H-580);
+  ctx.shadowColor='rgba(0,0,0,.9)';ctx.shadowBlur=14;
+  ctx.font=`600 48px ${MINCHO}`;const w=ctx.measureText(str).width,sz=w>1180?48*1180/w:48;text(str,640,652,sz,'#fff','center',600,MINCHO);ctx.restore();}
+// 右下の制作メモ（撮り方など）。制作メモがオンのときだけ
+function note(str){if(!annOn)return;ctx.save();ctx.globalAlpha=.75;text(str,W-30,H-30,15,'#fff','right');ctx.restore();}
+function black(a){if(a<=0)return;ctx.fillStyle=`rgba(0,0,0,${clamp(a,0,1)})`;ctx.fillRect(0,0,W,H);}
+function vignette(a){const g=ctx.createRadialGradient(640,360,220,640,360,820);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,`rgba(0,0,0,${a})`);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+function glow(who,blur=16){if(who&&GLOW[who]){ctx.shadowColor=GLOW[who];ctx.shadowBlur=blur;}else ctx.shadowBlur=0;}
+function fade(u,a=.12,b=.12){return clamp(u/a,0,1)*clamp((1-u)/b,0,1);}
+function screenGlow(x,y,r,c='rgba(160,200,255,.35)'){const g=ctx.createRadialGradient(x,y,10,x,y,r);g.addColorStop(0,c);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+
+// 全身。y＝足もと。pose: stand/walk/sit/wave/cheers。view: front/back/left/right
+function fig(x,y,s,o={}){
+  const t=o.t||0,pose=o.pose||'stand',view=o.view||'front',d=view==='left'?-1:1,ph=t*6;
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
+  glow(o.who);ctx.strokeStyle=ctx.fillStyle=o.color||INK;ctx.lineCap='round';ctx.lineJoin='round';
+  const sitting=pose==='sit',hip=sitting?-40:-82,sh=hip-64,side=view==='left'||view==='right';
+  const L=(x1,y1,x2,y2,w)=>{ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();};
+  const P=(pts,w)=>{ctx.lineWidth=w;ctx.beginPath();pts.forEach(([a,b],i)=>i?ctx.lineTo(a,b):ctx.moveTo(a,b));ctx.stroke();};
+  if(pose==='walk'){
+    const a=Math.sin(ph)*.35;
+    for(const sg of [1,-1]){const b=a*sg,kx=Math.sin(b)*44,ky=hip+Math.cos(b)*44;P([[sg*(side?2:8),hip],[side?kx*d:sg*8+kx*.3,ky],[side?kx*d:sg*10+kx*.3,ky+40]],17);}
+  }else if(sitting){
+    if(side)P([[0,hip],[d*58,hip],[d*62,0]],17);else{P([[-10,hip],[-22,hip+14],[-24,0]],17);P([[10,hip],[22,hip+14],[24,0]],17);}
+  }else{L(-9,hip,-12,0,17);L(9,hip,12,0,17);}
+  L(0,hip,0,sh+6,38);
+  if(pose==='walk'){const a=Math.sin(ph)*.4;for(const sg of [1,-1]){const b=-a*sg,ex=sg*(side?3:16)+Math.sin(b)*30*(side?d:.4);P([[sg*(side?3:14),sh],[ex,sh+28],[ex,sh+54]],13);}}
+  else if(pose==='wave'){P([[-14,sh],[-20,sh+34],[-20,sh+62]],13);P([[14,sh],[40,sh-26],[46+Math.sin(t*9)*14,sh-62]],13);}
+  else if(pose==='cheers'){P([[-14,sh],[-38,sh-30],[-44,sh-68]],13);P([[14,sh],[38,sh-30],[44,sh-68]],13);}
+  else if(sitting&&side){P([[0,sh],[d*24,sh+30],[d*44,sh+36]],13);}
+  else{P([[-14,sh],[-20,sh+34],[-20,sh+62]],13);P([[14,sh],[20,sh+34],[20,sh+62]],13);}
+  const hx=side?d*3:0,hy=sh-30;ctx.beginPath();ctx.arc(hx,hy,25,0,Math.PI*2);ctx.fill();
+  if(side){ctx.beginPath();ctx.moveTo(hx+d*21,hy-4);ctx.lineTo(hx+d*29,hy+4);ctx.lineTo(hx+d*20,hy+9);ctx.fill();}
+  if(view==='back'){ctx.fillStyle='rgba(0,0,0,.35)';ctx.shadowBlur=0;ctx.beginPath();ctx.arc(hx,hy-4,23,Math.PI*1.05,Math.PI*1.95);ctx.fill();}
+  ctx.restore();
+}
+// 寄りの上半身
+function bust(x,y,s,o={}){
+  const t=o.t||0,down=o.down||0;
+  ctx.save();ctx.translate(x,y+(o.bob?Math.sin(t*o.bob)*4:0));ctx.scale(s,s);
+  glow(o.who,26);ctx.fillStyle=o.color||INK;
+  ctx.beginPath();ctx.ellipse(0,330,250,170,0,Math.PI,0);ctx.fill();
+  ctx.fillRect(-45,120,90,100);
+  ctx.save();ctx.translate(0,down*40);ctx.beginPath();ctx.ellipse(0,40,110,128,0,0,Math.PI*2);ctx.fill();ctx.restore();
+  ctx.restore();
+}
+function arm(x0,y0,x1,y1,w,c=INK){line(x0,y0,x1,y1,w,c);circ(x1,y1,w*.62,c);}
+const SKIN='#d9a882';
+const PAL=['#f2c6a0','#9cc3e6','#a8d5a2','#f4b6c2','#f5d58a','#c9b8e8','#9fd8d0','#e8a07a'];
+// 塗り絵のキャンバス（正方形）。prog＝塗り終わった割合。⑪ の手渡しまで画面に出さない
+function board(x,y,s,prog){
+  const G=10,cs=s/G,x0=x-s/2,y0=y-s/2,N=G*G,k=Math.floor(prog*N);
+  rect(x0-6,y0-6,s+12,s+12,'#d9cdb6');rect(x0,y0,s,s,'#fbfaf6');
+  for(let i=0;i<N;i++){const j=(i*37)%N,cx=x0+(j%G)*cs,cy=y0+Math.floor(j/G)*cs;
+    if(i<k)rect(cx,cy,cs+.5,cs+.5,PAL[(j*3+Math.floor(j/G))%PAL.length]);
+    else{ctx.strokeStyle='rgba(0,0,0,.12)';ctx.lineWidth=1;ctx.strokeRect(cx+.5,cy+.5,cs-1,cs-1);}}
+}
+function boardBack(x,y,s){rect(x-s/2,y-s/2,s,s,'#a8865a');rect(x-s/2+s*.08,y-s/2+s*.08,s*.84,s*.84,'#8a6b45');}
+// 布をかけたキャンバス（会場で隠しておく）
+function clothCanvas(x,y,s){
+  poly([[x-s*.56,y+s*.55],[x-s*.5,y-s*.5],[x-s*.2,y-s*.56],[x+s*.2,y-s*.54],[x+s*.5,y-s*.5],[x+s*.58,y+s*.55]],'#e8e4dc');
+  for(let i=-2;i<=2;i++)line(x+i*s*.2,y-s*.45,x+i*s*.24,y+s*.5,2,'rgba(0,0,0,.08)');
+}
+
+// ---------- ① 思い出ムービー（仮の絵。実際はぱっぴーの動画。音なし） ----------
+const MEM={
+  takibi:(u,t)=>{rect(0,0,W,H,'#0b0a12');for(let i=0;i<60;i++)circ((i*211)%W,(i*97)%330,1.5,'rgba(255,255,255,.6)');rect(0,560,W,160,'#15130f');screenGlow(640,560,420,'rgba(255,140,40,.45)');for(let i=0;i<5;i++){const f=Math.sin(t*12+i*2)*14;poly([[600+i*20,580],[610+i*20+f*.3,500-i%2*30+f],[625+i*20,580]],i%2?'#ffb347':'#ff6a2b');}fig(420,600,1.7,{pose:'sit',view:'right',who:'pappy',t});fig(860,600,1.7,{pose:'sit',view:'left',t});},
+  laugh:(u,t)=>{bgGrad('#f3dcc6','#c09a7b');bust(880,280,1.1,{who:'pappy',bob:14,t});},
+};
+
+// ---------- ③ 届くシーン（仮で C 覗き込み。10/28 伊藤：3人で撮る） ----------
+// 段ボール。Paint Yours のロゴ・品名・伝票の面はカメラに向けない（無地の面とガムテープだけ）
+function box(x,y,w,h){rect(x-w/2,y-h,w,h,'#c8a06a');rect(x-w/2,y-h,w,10,'#b38a55');rect(x-16,y-h,32,h*.45,'rgba(236,216,168,.85)');rect(x-w/2,y-h*.55,w,3,'rgba(0,0,0,.08)');}
+function arriveHold(f,t){
+  bgGrad('#e4ddd0','#b5aa98');rect(0,560,W,160,'#8d7a62');rect(60,120,230,440,'#9a8366');circ(262,350,9,'#d8c08a');   // 玄関のドア
+  const by=Math.sin(t*10)*6*(f<.5?1:.3);
+  fig(400,690,2,{pose:f>.2?'cheers':'stand',view:'right',who:'rara',t});fig(880,690,2,{pose:f>.25?'cheers':'stand',view:'left',who:'chacha',t:t+.4});
+  fig(640,690+by*.3,2.2,{who:'asako',t});box(640,600+by,330,220);
+  arm(560,420+by,500,470+by,30);arm(720,420+by,780,470+by,30);   // 段ボールを抱える腕
+}
+function slipCut(f,t){   // 伝票のアップ → カッターでテープを切る
+  rect(0,0,W,H,'#c49a62');for(let i=0;i<40;i++)rect(0,i*18,W,2,'rgba(0,0,0,.05)');
+  ctx.save();ctx.translate(430,250);rect(-210,-130,420,260,'#f7f5ef');
+  for(let j=0;j<6;j++)rect(-180,-100+j*36,j%2?220:320,12,'#bdbdbd');
+  ctx.globalAlpha=.92;for(let i=0;i<14;i++)for(let j=0;j<5;j++)rect(-185+i*26,-108+j*30,26,30,['#cfcfcf','#b9b9b9','#dedede'][(i+j)%3]);   // 宛名・品名はモザイク
+  ctx.globalAlpha=1;text('宛名・品名は映さない',0,105,18,'#777');ctx.restore();
+  rect(0,560,W,46,'rgba(236,216,168,.9)');const cx=lerp(120,1160,smooth(clamp(f,0,1)));line(120,583,cx,583,3,'#5a4630');
+  arm(cx+260,860,cx+16,600,56,SKIN);rect(cx-8,560,40,22,'#f0c419');line(cx-8,580,cx-30,590,4,'#ccc');
+}
+// 箱の中にカメラを置き、覗き込む3人の顔を下から撮る（中身は映らない）。k＝ふたの開き 0〜1
+const OP=[380,130,900,470];   // 開いた口（画面上の四角）
+function peekCut(f,t){
+  const k=smooth(clamp(f/.3,0,1)),[x0,y0,x1,y1]=OP;
+  rect(0,0,W,H,'#2e2214');
+  poly([[0,0],[W,0],[x1,y0],[x0,y0]],'#5a4026');poly([[0,H],[W,H],[x1,y1],[x0,y1]],'#3a2a18');
+  poly([[0,0],[x0,y0],[x0,y1],[0,H]],'#4a3420');poly([[W,0],[x1,y0],[x1,y1],[W,H]],'#4a3420');
+  ctx.save();ctx.beginPath();ctx.rect(x0,y0,x1-x0,y1-y0);ctx.clip();
+  bgGrad('#fff6e2','#e9dcc2',y0,y1);screenGlow(640,300,320,'rgba(255,255,255,.7)');
+  // 覗き込む3人（上下を逆さに描いて、口の縁から顔が下りてくる形）
+  [['rara',490,-.18],['asako',640,0],['chacha',790,.18]].forEach(([who,x,r],i)=>{const d=smooth(clamp((f-.32-i*.06)/.2,0,1));
+    ctx.save();ctx.translate(x,y0);ctx.rotate(r);ctx.scale(1,-1);bust(0,-lerp(-60,170,d),.55,{who});ctx.restore();});
+  // 閉じたふた（開くと左右へ）
+  const hw=(x1-x0)/2*(1-k);rect(x0,y0,hw,y1-y0,'#6a4c2c');rect(x1-hw,y0,hw,y1-y0,'#6a4c2c');if(k<1)line(640,y0,640,y1,4,`rgba(255,240,200,${.7*(1-k)})`);
+  ctx.restore();
+  screenGlow(640,300,560,`rgba(255,230,180,${.25*k})`);
+  note('箱の中にカメラを置き、覗き込む顔を下から撮る（中身は映らない）');
+}
+
+// ---------- ⑤〜⑦ 人のところ（10/28 伊藤：黒地に文字だけ） ----------
+const PEOPLE=18;
+const ANG={face:'正面（顔＋塗っている様子。キャンバスは裏向き）',hand:'手元のアップ（周りだけ）',side:'真横から（キャンバスは薄い板）',over:'肩越し（手前に頭のボケ）',top:'真上から（パレット・水入れ＋キャンバスの端）'};
+const ANG_ORDER=['over','face','side','top','hand'];   // 3人目から順に回す（1人目＝正面→手元、2人目＝真横→真上）
+// 手書きの言葉（仮）。1〜3人目は画面の右下に重ねる。4人目以降は ⑬ アウトロでまとめて使う
+const MSGS=['また会おう!!','福島でも元気でね','いってらっしゃい！','ありがとう','また飲もうね','体に気をつけて','いつでも帰っておいで','大好きだよ','応援してる！','たまには連絡してね','福島に遊びに行くね','出会えてよかった','ずっと友だち','がんばれ〜！','またね！','笑顔でね','おつかれさま','行ってらっしゃい'];
+// 人の場面の文字カード
+function personCard(n,body,sub,f){rect(0,0,W,H,'#000');const a=clamp(f/.15,0,1);ctx.save();ctx.globalAlpha=a;text(`${n}人目（仮）`,640,220,24,'#8a8a8a','center',500);text(body,640,300,40,'#e6e6e6','center',600);if(sub)text(sub,640,370,22,'#8a8a8a','center',400);ctx.restore();}
+// 手書きの文字。本人が話している／塗っている画面の右下に、書いていくように1文字ずつ出す（らら案：メモ帳に書いたものを貼る）
+// 手書きらしさ：1文字ごとに大きさ・高さ・傾きを少しずつ揺らす（行全体は水平のまま）
+function handNote(msg,f){
+  if(f<=0)return;const ch=[...msg],n=ch.length,k=clamp(f/.5,0,1)*n,size=58,right=1215,base=572;
+  ctx.font=`400 ${size}px ${HAND}`;const ws=ch.map(c=>ctx.measureText(c).width*.94),tw=ws.reduce((a,b)=>a+b,0);
+  let x=right-tw;ctx.save();ctx.shadowColor='rgba(0,0,0,.85)';ctx.shadowBlur=12;ctx.textAlign='left';ctx.textBaseline='alphabetic';ctx.fillStyle='#fff';
+  ch.forEach((c,i)=>{const a=clamp(k-i,0,1);if(a>0){const s=size*(1+Math.sin(i*1.9+.5)*.07),dy=Math.sin(i*2.3)*4+Math.cos(i*1.1)*2,r=Math.sin(i*3.7)*.05;
+    ctx.save();ctx.globalAlpha=a;ctx.translate(x,base+dy);ctx.rotate(r);ctx.font=`400 ${s}px ${HAND}`;ctx.fillText(c,0,0);ctx.restore();}x+=ws[i];});
+  ctx.restore();
+  if(f>.05)note('手書きの文字（右下に重ねる。何に書いてもらうかは未決：紙・カード／タブレット）');
+}
+
+// ---------- カット ----------
+// d＝秒、cap＝要点テロップ（[[開始u,文字]]）、what＝中身、scr＝画面・撮り方、snd＝音・セリフ、flag＝要確認、memo＝メモ、lines＝[[開始u,終了u,字幕,話す人]]
+// 曲：動画の秒＝曲の秒＋SONG_SHIFT（らら仮動画と同じ位置）。① は無音で、② の頭（＝曲の鳴り始め）から流す
+const SONG_SHIFT=2.8;
+const CUTS=[
+{d:5.6,cap:'① ぱっぴーとの思い出',what:'ぱっぴーとの思い出ムービー（音なし）。笑っている動画で終わる',scr:'これまで撮ったぱっぴーの動画',snd:'無音（10/28 伊藤：① は音声いらない）',memo:'らら案は「音ありの思い出ムービー」で 9秒。曲の鳴り始め（曲の 2.8秒＝動画の 5.6秒）を ② に合わせるため 5.6秒に縮めた',
+ draw:(u,lt,t)=>{(u<.5?MEM.takibi:MEM.laugh)((u%.5)*2,t);black((u-.8)/.2);note('仮の絵（実際はぱっぴーの動画）');}},
+{d:12.4,what:'字幕「パッピーが長野から旅立つ」「共に過ごせた時間に感謝を込めて」「みんなからの贈り物」',scr:'黒地に手書きの文字',snd:'ここから曲（「僕らまた（吹奏楽 ver.）」）が始まる',memo:'らら案のまま（文言は仮）。らら：「感謝を込めて作った」と言い切るのが泣かせどころ',
+ draw:(u)=>{rect(0,0,W,H,'#000');const S=['パッピーが長野から旅立つ','共に過ごせた時間に感謝を込めて','みんなからの贈り物'],i=Math.min(2,Math.floor(u*3));hand(S[i],640,360,50,'#fff',fade((u*3)%1,.2,.2));}},
+{d:9,cap:[[0,'③ やっと届いた！'],[.42,'③ 何が届いたんだ？']],what:'3人で段ボールを抱えて「やっと届いたぞー！」→ 伝票のアップ・カッターでテープを切る → 箱の中から、覗き込む3人の顔（中身は映らない）「おお〜」→ そのまま ④ へ',
+ scr:'実写：玄関で3人（あさこが段ボールを抱え、らら・ちゃちゃが両脇で喜ぶ）→ 伝票とカッターの手元 → 箱の底にカメラを置き、ふたを開けて覗き込む3人を下から',snd:'',
+ flag:'届くシーンの撮り方（今は仮で C 覗き込み。E-26）',
+ memo:'10/28 伊藤：らら案の開封シーンを「届くシーン」に変更。3人で撮る。「じゃあこれをみんなで塗ってこう！」は削除し、覗き込みから塗るところへつなぐ（その 3秒をここに足した）。段ボールの Paint Yours のロゴ・品名、伝票の宛名は映さない',
+ lines:[[.03,.3,'「やっと届いたぞー！」','3人'],[.75,.98,'「おお〜」','3人']],
+ draw:(u,lt,t)=>{if(u<.32){arriveHold(u/.32,t);note('玄関で3人（ロゴの面はカメラに向けない）');}else if(u<.5){slipCut((u-.32)/.18,t);note('伝票のアップ → カッターでテープを切る');}else peekCut((u-.5)/.5,t);}},
+{d:3,cap:'④ 1人目のところへ',what:'1人目のところへ向かう（向かうシーンは1人目だけ）',scr:'実写（キャンバスを袋に入れて持ち、歩く後ろ姿か足元）',snd:'',memo:'らら：1人目だけ向かうところを見せると、その後も向かって書いてもらっていると想像できる。キャンバスは袋に入れたまま運ぶ',
+ draw:(u,lt,t)=>{bgGrad('#cfe3f2','#eaf2f7',0,400);rect(0,400,W,320,'#9a9a92');poly([[560,400],[720,400],[1000,720],[280,720]],'#b8b8b0');const s=lerp(2.2,1.6,u),y=lerp(700,560,u);fig(640,y,s,{pose:'walk',view:'back',who:'asako',t});rect(640+22*s,y-150*s,46*s,60*s,'#5d6b7a');}},
+{d:9,cap:'⑤ 1人目',what:'1人目：足元と声だけで始めて、カメラを置いたところで誰か分かる → 色塗り（正面 → 手元のアップ）。色塗りの途中から右下に手書きの文字「また会おう!!」→「出来ました〜」（顔だけ。絵は見せない）',
+ scr:'今は黒地に文字。撮るもの：足元 → カメラを置く → 正面（キャンバスは裏向き）→ 手元のアップ → 本人の顔。手書きは右下に重ねる',snd:'',
+ memo:'らら：誰だろう、のワクワク感。10/28：「出来ました〜」は絵ではなく顔で撮る（絵柄は ⑪ まで隠す）。手書きは本人が塗っている・話している画面の右下に重ねる',lines:[[.02,.2,'（声）「おじゃましまーす」（仮）',''],[.76,.96,'「出来ました〜」','1人目']],
+ draw:(u,lt,t)=>{if(u<.2)personCard(1,'足元と声だけ','（誰だろう？）',u/.2);else if(u<.32)personCard(1,'カメラを置く → 誰か分かる','',(u-.2)/.12);
+   else if(u<.75)personCard(1,'色を塗る',u<.54?'画角：'+ANG.face:'画角：'+ANG.hand,(u-.32)/.43);else personCard(1,'「出来ました〜」','（本人の顔。絵は見せない）',(u-.75)/.25);
+   handNote(MSGS[0],(u-.42)/.58);}},
+{d:6,cap:'⑥ 2人目',what:'2人目：色塗り（真横 → 真上）。右下に手書きの文字 →「出来ました〜」（顔だけ）',scr:'今は黒地に文字。撮るもの：真横 → 真上 → 本人の顔（画角は1人目と変える）。手書きは右下に重ねる',snd:'',lines:[[.68,.95,'「出来ました〜」','2人目']],
+ draw:(u)=>{if(u<.66)personCard(2,'色を塗る',u<.33?'画角：'+ANG.side:'画角：'+ANG.top,u/.66);else personCard(2,'「出来ました〜」','（本人の顔。絵は見せない）',(u-.66)/.34);handNote(MSGS[1],(u-.12)/.88);}},
+];
+// 3〜18人目：色塗りシーン（タイムシートどおり 3〜17人目は 6.4秒、18人目は 6秒）。手書きの文字は3人目まで
+for(let n=3;n<=PEOPLE;n++){const ang=ANG_ORDER[(n-3)%ANG_ORDER.length],withMsg=n===3;
+  CUTS.push({d:n<PEOPLE?6.4:6,cap:n===3?'⑦ みんなが少しずつ塗っていく':'',
+    what:`${n}人目：色塗り${withMsg?'。右下に手書きの文字':''}（塗った後の絵は見せない）`,scr:'今は黒地に文字。撮るもの：'+ANG[ang]+(withMsg?'。手書きは右下に重ねる':''),snd:n===3?'3〜18人目で約1分42秒。1人約6秒':'',
+    flag:n===3?'1人を1カットにするか2カット（3秒×2）にするか。手書きを何に書いてもらうか（E-27）':(n===4?'4人目以降は手書きを画面に出さない（10/28 伊藤）。⑬ アウトロでまとめて出す':(n===PEOPLE?'出演者は18人か19人か（B-13）':'')),
+    memo:n===3?'らら：喋ってもらってもよいが短い（約6秒）。直筆メッセージ＋少し言葉。人によっては話す動画をメインにして色塗りをワイプに':'',
+    draw:(u)=>{personCard(n,'色を塗る','画角：'+ANG[ang],u);if(withMsg)handNote(MSGS[n-1],(u-.15)/.85);}});}
+CUTS.push(
+{d:6,cap:'⑧ 託されて、会場へ',what:'18人目から〇〇へ託され、〇〇は会場準備へ',scr:'実写（キャンバスを裏向きのまま手渡す → 持って歩く）',snd:'',memo:'らら：送別会につながってきている感じ。キャンバスは裏向きで持つ（絵柄は映さない）',
+ draw:(u,lt,t)=>{if(u<.5){bgGrad('#dfe6ea','#a9b4ba');rect(0,520,W,200,'#6b5a48');fig(420,660,2,{view:'right',who:'guest',t});fig(860,660,2,{view:'left',who:'asako',t});boardBack(lerp(520,740,smooth(u/.5)),420,160);}else{bgGrad('#3b3f52','#1d1f28',0,420);rect(0,420,W,300,'#2a2b33');fig(lerp(300,900,(u-.5)/.5),640,1.8,{pose:'walk',view:'right',who:'asako',t});boardBack(lerp(330,930,(u-.5)/.5),520,110);}}},
+{d:6,cap:'⑨ ソワソワと待つ',what:'会場準備の後、ソワソワと待つ',scr:'実写（会場。引き。キャンバスは布をかけて置いておく）',snd:'',memo:'らら案のまま',
+ draw:(u,lt,t)=>{bgGrad('#2a2630','#141218');rect(240,90,800,300,'#e9e6df');for(let r=0;r<3;r++)for(let c=0;c<8;c++)rect(200+c*115,470+r*70,70,40,'#4a4452');clothCanvas(1150,560,130);fig(640+Math.sin(t*1.5)*220,700,1.6,{pose:'walk',view:Math.cos(t*1.5)>0?'right':'left',who:'asako',t});note('右：布をかけたキャンバス');}},
+{d:3,what:'「今はグッバイ」でカメラを手で隠す → 暗転',scr:'実写（手がレンズをふさぐ）',snd:'2:41〜2:43 無音',memo:'らら案のまま',lines:[[.05,.6,'♪「今はグッバイ」','']],
+ draw:(u)=>{bgGrad('#2a2630','#141218');rect(240,90,800,300,'#e9e6df');const k=smooth(clamp(u/.6,0,1));circ(640,360,lerp(0,900,k),'#0a0909');}},
+{d:21,cap:[[0,''],[.68,'⑪ ここで初めて、何を塗っていたか分かる']],what:'「パッピー、後ろを見てください！」→ 会場で実物のキャンバスを手渡す。布を取ったところで初めて絵柄が分かる',scr:'無音の黒 → 会場の実写（その場で実物を手渡す）',snd:'無音からの盛り上がり。曲は止めずに手渡しの BGM に使う',
+ flag:'誰が後ろでキャンバスを持つか・会場でどう隠すか（F-05）。D-05（上映 → そのまま手渡し）から「上映の途中で手渡し」に変わる',memo:'らら：1本目の発注 → 製作 → 渡すまでがきれいにつながる。10/28 伊藤：ここで何を塗っていたか判明する',
+ draw:(u,lt,t)=>{if(u<.28){rect(0,0,W,H,'#000');hand('パッピー、後ろを見てください！',640,360,50,'#fff',fade(u/.28,.2,.15));return;}
+   const k=(u-.28)/.72;bgGrad('#3a2f38','#17131a');screenGlow(640,200,600,'rgba(255,200,140,.25)');for(let c=0;c<7;c++)fig(220+c*140,700,1.4,{pose:'sit',view:'back',t});
+   fig(640,690,1.9,{pose:k>.3?'stand':'sit',view:k>.25?'front':'back',who:'pappy',t});
+   if(k<.5){const gx=lerp(1300,860,smooth(clamp(k/.45,0,1)));clothCanvas(gx-80,420,150);['asako','chacha','rara'].forEach((w,i)=>fig(gx+i*120,600,1.6,{pose:'walk',view:'left',who:w,t}));}
+   else{const r=smooth(clamp((k-.5)/.15,0,1)),s=lerp(150,300,smooth(clamp((k-.5)/.3,0,1)));board(640,330,s,1);if(r<1){ctx.save();ctx.globalAlpha=1-r;ctx.translate(0,-r*260);clothCanvas(640,330,s);ctx.restore();}
+     screenGlow(640,330,s*1.4,`rgba(255,230,170,${.35*r})`);['asako','chacha','rara'].forEach((w,i)=>fig(900+i*120,600,1.6,{pose:k>.62?'cheers':'stand',view:'left',who:w,t}));note('布を取る → 初めて絵柄が分かる');}}},
+{d:12,what:'「パッピーへ」メッセージを表示',scr:'黒地に文字（量も多めに）',snd:'',flag:'完成した絵を動画の中でも見せるか（E-28）。「⑫ で完成した絵を見せる案」ボタンで、メッセージの背景に絵を出す案に切り替わる',memo:'文言は仮。らら：よくあるけど、質も量もやる',
+ draw:(u)=>{rect(0,0,W,H,'#000');if(showArt){board(640,360,560,1);black(.72);note('案：手渡しのあと、ここで初めて画面にも完成した絵を出す');}
+   hand('パッピーへ',640,140,48,'#f6d27a',fade(u,.08,.1));const S=['楽しいことが沢山でした','この先の道も応援してるよ','またいつでもチームに戻ってきてね','一同より'];S.forEach((s,i)=>hand(s,640,250+i*90,i===3?30:38,'#fff',clamp((u-.12-i*.15)/.08,0,1)*clamp((1-u)/.1,0,1)));}},
+{d:9,cap:'⑬ みんなの手書きメッセージ',what:'アウトロ：みんなの手書きメッセージをたくさん出す＋みんなの「パッピー」の声（人は映さない）',scr:'色塗りのときに書いてもらった手書きを並べる（4人目以降の分もここで出す）',snd:'3:13 からのしっとりしたアウトロ',memo:'らら案のまま。⑤〜⑦ の手書きをここで使う',lines:[[.1,.9,'（いろんな人の声）「パッピー！」','']],
+ draw:(u)=>{rect(0,0,W,H,'#0c0c10');const n=Math.floor(u*22)+1;for(let i=0;i<n;i++){const x=120+(i*263)%1040,y=90+(i*151)%480;rect(x-100,y-50,200,100,'#fbfaf3');ctx.font=`400 24px ${HAND}`;const m=MSGS[i%MSGS.length],w=ctx.measureText(m).width;hand(m,x,y,w>180?24*180/w:24,'#333');}}},
+{d:5.2,what:'あさこ・ちゃちゃ「パッピー」→「またね」',scr:'黒（声だけ）',snd:'3:26〜3:29 無音（曲が終わる）',memo:'らら案のまま',lines:[[.05,.5,'「パッピー」','あさこ・ちゃちゃ'],[.55,.95,'「またね」','あさこ・ちゃちゃ']],
+ draw:()=>rect(0,0,W,H,'#000')},
+);
+
+// ---------- タイムライン ----------
+const segs=[];let T=0;
+CUTS.forEach((c,i)=>{segs.push(Object.assign({id:'2-'+String(i+1).padStart(2,'0'),start:T,end:T+c.d},c));T+=c.d;});
+const TOTAL=T,SONG_IN=segs[1].start;
+const capsOf=s=>!s.cap?[]:typeof s.cap==='string'?[[0,s.cap]]:s.cap;
+
+function render(t){
+  t=clamp(t,0,TOTAL-1e-6);
+  const s=segs.find(x=>t>=x.start&&t<x.end)||segs[segs.length-1],lt=t-s.start,u=lt/s.d;
+  ctx.clearRect(0,0,W,H);ctx.save();s.draw(u,lt,t);ctx.restore();vignette(.35);
+  (s.lines||[]).forEach(([a,b,str,who])=>{if(u>=a&&u<b)subtitle(str,who);});
+  const cs=capsOf(s);
+  if(capOn&&cs.length){const i=cs.reduce((k,c,j)=>u>=c[0]?j:k,0),c0=cs[i][0]*s.d;if(cs[i][1])caption(cs[i][1],clamp((lt-c0)/.3,0,1));}
+  if(annOn){
+    const a1=`${s.id}　${s.what}`,a2='画面：'+s.scr;ctx.font=`600 17px ${FONT}`;
+    const w1=Math.min(1180,ctx.measureText(a1).width);ctx.font=`400 14px ${FONT}`;const w=Math.max(w1,ctx.measureText(a2).width)+40;
+    ctx.fillStyle='rgba(0,0,0,.62)';ctx.fillRect(16,16,Math.min(1110,w),64);
+    ctx.save();ctx.beginPath();ctx.rect(16,16,1110,64);ctx.clip();text(a1,30,37,17,'#fff','left',600);text(a2,30,62,14,'#f6d27a','left',400);ctx.restore();
+    if(s.flag){ctx.font=`600 15px ${FONT}`;const fw=ctx.measureText('要確認').width+24;rrect(W-fw-16,16,fw,30,6,'#ff8a65');text('要確認',W-16-fw/2,31,15,'#111','center',700);}
+  }
+  return s;
+}
+const fmt=x=>{x=Math.max(0,x);const m=Math.floor(x/60),s=Math.floor(x%60);return m+':'+String(s).padStart(2,'0');};
+
+// ---------- 進行バー（カットの区切り） ----------
+const bar=$('bar');
+segs.forEach((s,i)=>{const d=document.createElement('div');d.className='seg';d.style.left=(s.start/TOTAL*100)+'%';d.style.width=(s.d/TOTAL*100)+'%';d.style.background=i%2?'#4d3a2c':'#5c4634';if(s.flag)d.style.boxShadow='inset 0 -4px 0 #ff8a65';d.title=s.id+' '+s.what;bar.appendChild(d);});
+const head=document.createElement('div');head.className='head';bar.appendChild(head);
+let drag=false;const seek=e=>{const r=bar.getBoundingClientRect();t=clamp((e.clientX-r.left)/r.width,0,1)*TOTAL;};
+bar.addEventListener('pointerdown',e=>{drag=true;seek(e);});addEventListener('pointermove',e=>{if(drag)seek(e);});addEventListener('pointerup',()=>drag=false);
+
+// ---------- カット表 ----------
+const tb=$('cuts'),rows=[],esc=s=>String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]);
+{const r=document.createElement('tr');r.className='sec';r.innerHTML='<td colspan="7">2本目：プレゼントが届くまで 3:29（1本目から言葉を挟まず続けて流す）</td>';tb.appendChild(r);}
+segs.forEach(s=>{
+  const r=document.createElement('tr');r.className='cut';
+  const say=(s.lines||[]).filter(l=>!/^（.*）$/.test(l[2])||l[3]).map(l=>esc(l[2])+(l[3]?`（${esc(l[3])}）`:'')).join('<br>');
+  const cap=capsOf(s).map(c=>c[1]).filter(Boolean).join(' → ');
+  r.innerHTML=`<td class="n">${fmt(s.start)}</td><td class="n">${s.id}</td><td class="n">${s.d}</td><td>${cap?'<b>'+esc(cap)+'</b><br>':''}${esc(s.what)}</td><td>${esc(s.scr)}</td><td>${esc(s.snd)}${s.snd&&say?'<br>':''}${say}</td><td class="flag">${s.flag?'要確認：'+esc(s.flag):''}${s.flag&&s.memo?'<br>':''}<span style="color:var(--muted)">${esc(s.memo)}</span></td>`;
+  r.onclick=()=>{t=s.start;scrollTo({top:0,behavior:'smooth'});};tb.appendChild(r);rows.push([s,r]);
+});
+
+// ---------- プレイヤー ----------
+let t=0,playing=false,last=performance.now(),speed=1,annOn=false,capOn=true,showArt=false;
+const playB=$('play'),tcEl=$('tc');
+const updBtn=()=>playB.textContent=playing?'❚❚ 停止':'▶ 再生';
+playB.onclick=()=>{if(t>=TOTAL-0.01)t=0;playing=!playing;updBtn();};
+$('restart').onclick=()=>{t=0;playing=true;updBtn();};
+$('spd').onclick=e=>{speed=speed===1?2:speed===2?4:1;e.target.textContent=speed+'x';};
+$('ann').onclick=e=>{annOn=!annOn;e.target.classList.toggle('on',annOn);};
+$('cap').onclick=e=>{capOn=!capOn;e.target.classList.toggle('on',capOn);};
+$('art').onclick=e=>{showArt=!showArt;e.target.classList.toggle('on',showArt);};
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'){e.preventDefault();playB.click();}});
+// 曲：「僕らまた（吹奏楽 ver.）」。sources から自動で読み、読めなければファイルを選ぶ。① は鳴らさない
+const A=new Audio();let hasA=false;
+A.addEventListener('canplay',()=>{if(!hasA){hasA=true;$('bgmName').textContent='僕らまた（吹奏楽 ver.）（sources から自動）';}});
+A.addEventListener('error',()=>{if(!hasA)$('bgmName').textContent='未選択（2026-10-28_BGM_僕らまた_吹奏楽ver.mp3）';});
+A.src='../sources/'+encodeURIComponent('2026-10-28_BGM_僕らまた_吹奏楽ver.mp3');
+$('bgm').onchange=e=>{const f=e.target.files[0];if(!f)return;hasA=false;A.src=URL.createObjectURL(f);$('bgmName').textContent=f.name;};
+function syncMusic(){
+  if(!hasA)return;const pos=t-SONG_SHIFT,want=playing&&t>=SONG_IN&&(!A.duration||pos<A.duration);
+  if(want){A.playbackRate=speed;if(Math.abs(A.currentTime-pos)>0.3)A.currentTime=pos;if(A.paused)A.play().catch(()=>{});}
+  else if(!A.paused)A.pause();
+  A.volume=+$('vol').value;
+}
+function frame(now){
+  if(playing){t+=(now-last)/1000*speed;if(t>=TOTAL){t=TOTAL;playing=false;updBtn();}}
+  last=now;const s=render(t);syncMusic();
+  head.style.left=(t/TOTAL*100)+'%';
+  tcEl.textContent=fmt(t)+' / '+fmt(TOTAL);
+  rows.forEach(([x,r])=>r.classList.toggle('cur',x===s));
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
